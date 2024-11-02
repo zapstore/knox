@@ -10,14 +10,14 @@ import { persist } from 'zustand/middleware';
 interface KnoxKey {
   name: string;
   pubkey: string;
-  ncryptsec: `ncryptsec1${string}`;
+  sec: `ncryptsec1${string}`;
   inserted_at: Date;
 }
 
 const keySchema: z.ZodType<KnoxKey> = z.object({
   name: z.string(),
   pubkey: n.id(),
-  ncryptsec: n.bech32('ncryptsec'),
+  sec: n.bech32('ncryptsec'),
   inserted_at: z.coerce.date(),
 });
 
@@ -27,7 +27,7 @@ interface KnoxConnection {
   /** Pubkey of the app authorized to sign events with this connection. */
   authorized_pubkey: string;
   /** Pubkey for this connection. Secret key is stored in the keyring. NIP-46 responses will be signed by this key. */
-  bunker_ncryptsec: `ncryptsec1${string}`;
+  bunker_sec: `ncryptsec1${string}`;
   /** List of relays to connect to. */
   relays: string[];
 }
@@ -35,7 +35,7 @@ interface KnoxConnection {
 const connectionSchema: z.ZodType<KnoxConnection> = z.object({
   pubkey: n.id(),
   authorized_pubkey: n.id(),
-  bunker_ncryptsec: n.bech32('ncryptsec'),
+  bunker_sec: n.bech32('ncryptsec'),
   relays: z.string().url().array(),
 });
 
@@ -101,7 +101,7 @@ export class KnoxStore {
 
   addKey(name: string, seckey: Uint8Array, password: string): void {
     const pubkey = getPublicKey(seckey);
-    const ncryptsec = nip49.encrypt(seckey, password);
+    const sec = nip49.encrypt(seckey, password);
 
     for (const key of this.store.getState().keys) {
       if (key.name === name) {
@@ -117,7 +117,7 @@ export class KnoxStore {
         draft.keys.push({
           name,
           pubkey,
-          ncryptsec,
+          sec,
           inserted_at: new Date(),
         });
       });
