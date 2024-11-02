@@ -1,8 +1,10 @@
 import { NSchema as n } from '@nostrify/nostrify';
 import { assertEquals } from '@std/assert/equals';
 import { produce } from 'immer';
+import { getPublicKey } from 'nostr-tools';
+import * as nip49 from 'nostr-tools/nip49';
 import { z } from 'zod';
-import { createStore } from 'zustand/vanilla';
+import { createStore, type StoreApi } from 'zustand/vanilla';
 import { persist } from 'zustand/middleware';
 
 interface KnoxKey {
@@ -49,75 +51,121 @@ const stateSchema: z.ZodType<KnoxState> = z.object({
   version: z.number().positive(),
 });
 
-interface KnoxActions {
-  connect(connection: KnoxConnection): void;
-}
+export class KnoxStore {
+  private store: StoreApi<KnoxState>;
+  private watcher?: Deno.FsWatcher;
 
-export const store = createStore<KnoxState & KnoxActions>()(
-  persist(
-    (setState) => ({
-      keys: [],
-      connections: [],
-      version: 1,
+  constructor(private path: string) {
+    this.store = this.createStore();
+    this.store.setState({}); // Create bunker.json if it doesn't exist
+    this.watch();
+  }
 
-      /** Connect to a bunker using the authorization secret. */
-      connect(connection: KnoxConnection): void {
-        setState((state) => {
-          return produce(state, (draft) => {
-            draft.connections.push(connection);
-          });
+  createStore(): StoreApi<KnoxState> {
+    return createStore<KnoxState>()(
+      persist(
+        (_setState) => ({
+          keys: [],
+          connections: [],
+          version: 1,
+        }),
+        {
+          name: this.path,
+          version: 1,
+          storage: {
+            getItem(name) {
+              const text = Deno.readTextFileSync(name);
+              const state = stateSchema.parse(JSON.parse(text));
+
+              return { state, version: state.version };
+            },
+            async setItem(name, { state }) {
+              using file = await Deno.open(name, { write: true, create: true });
+              await file.lock(true);
+
+              const data = JSON.stringify(state, null, 2);
+              const buffer = new TextEncoder().encode(data);
+
+              const writer = file.writable.getWriter();
+              await writer.write(buffer);
+              await writer.close();
+            },
+            async removeItem(name) {
+              await Deno.remove(name);
+            },
+          },
+        },
+      ),
+    );
+  }
+
+  addKey(name: string, seckey: Uint8Array, password: string): void {
+    const pubkey = getPublicKey(seckey);
+    const ncryptsec = nip49.encrypt(seckey, password);
+
+    for (const key of this.store.getState().keys) {
+      if (key.name === name) {
+        throw new Error(`Key with name "${name}" already exists.`);
+      }
+      if (key.pubkey === pubkey) {
+        throw new Error(`Key with pubkey "${key.pubkey}" already exists.`);
+      }
+    }
+
+    this.store.setState((state) => {
+      return produce(state, (draft) => {
+        draft.keys.push({
+          name,
+          pubkey,
+          ncryptsec,
+          inserted_at: new Date(),
         });
-      },
-    }),
-    {
-      name: 'bunker.json',
-      version: 1,
-      storage: {
-        async getItem(name) {
-          const text = await Deno.readTextFile(name);
-          const state = stateSchema.parse(JSON.parse(text));
+      });
+    });
+  }
 
-          return { state, version: state.version };
-        },
-        async setItem(name, { state }) {
-          using file = await Deno.open(name, { write: true, create: true });
-          await file.lock(true);
+  /** Connect to a bunker using the authorization secret. */
+  connect(connection: KnoxConnection): void {
+    this.store.setState((state) => {
+      return produce(state, (draft) => {
+        draft.connections.push(connection);
+      });
+    });
+  }
 
-          const data = JSON.stringify(state, null, 2);
-          const buffer = new TextEncoder().encode(data);
-
-          const writer = file.writable.getWriter();
-          await writer.write(buffer);
-          await writer.close();
-        },
-        async removeItem(name) {
-          await Deno.remove(name);
-        },
-      },
-    },
-  ),
-);
-
-async function watch() {
-  const watcher = Deno.watchFs('bunker.json');
-
-  for await (const event of watcher) {
-    if (event.kind === 'modify') {
-      const text = await Deno.readTextFile('bunker.json');
-      const state = stateSchema.parse(JSON.parse(text));
+  private async watch() {
+    // Wait for file to be ready.
+    while (!this.watcher) {
       try {
-        const { keys, connections, version } = store.getState();
-        assertEquals(state, { keys, connections, version });
+        this.watcher = Deno.watchFs(this.path);
       } catch {
-        store.setState(state);
+        await new Promise<void>((resolve) => setTimeout(resolve, 100));
+      }
+    }
+
+    for await (const event of this.watcher) {
+      if (event.kind === 'modify') {
+        const text = await Deno.readTextFile(this.path);
+        const state = stateSchema.parse(JSON.parse(text));
+        try {
+          const { keys, connections, version } = this.store.getState();
+          assertEquals(state, { keys, connections, version });
+        } catch {
+          this.store.setState(state);
+        }
       }
     }
   }
+
+  subscribe(listener: (state: KnoxState, prevState: KnoxState) => void): () => void {
+    return this.store.subscribe(listener);
+  }
+
+  close(): void {
+    this.watcher?.close();
+  }
+
+  [Symbol.dispose]() {
+    this.close();
+  }
 }
-
-store.setState({}); // Create bunker.json if it doesn't exist
-watch();
-
-store.subscribe((state, _prevState) => {
-  console.log('State changed:', state);
-});
