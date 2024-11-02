@@ -1,7 +1,16 @@
-import { parseArgs } from '@std/cli/parse-args';
+import { program } from 'npm:@commander-js/extra-typings';
 
-const args = parseArgs(Deno.args, {
-  string: ['c']
-});
+program
+  .name('knox')
+  .description('Nostr bunker with JSON storage.')
+  .version('0.0.1')
+  .option('-f, --file <file>', 'Path to the bunker file', 'bunker.json');
 
-console.log(args);
+program.command('add')
+  .description('Add a new key to the bunker')
+  .argument('<name>', 'Name of the key')
+  .action((name) => {
+    console.log(typeof name);
+  });
+
+program.parse();
