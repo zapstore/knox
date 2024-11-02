@@ -70,13 +70,29 @@ export const store = createStore<KnoxState & KnoxActions>()(
       version: 1,
       storage: {
         async getItem(name) {
-          const text = await Deno.readTextFile(name);
+          using file = await Deno.open(name, { read: true, write: true });
+          await file.lock();
+
+          const buffer = new Uint8Array();
+          while (await file.read(buffer) !== null) {
+            continue;
+          }
+
+          const text = new TextDecoder().decode(buffer);
           const state = stateSchema.parse(JSON.parse(text));
+
           return { state, version: state.version };
         },
         async setItem(name, { state }) {
+          using file = await Deno.open(name, { write: true, create: true });
+          await file.lock(true);
+
           const data = JSON.stringify(state, null, 2);
-          await Deno.writeTextFile(name, data);
+          const buffer = new TextEncoder().encode(data);
+
+          const writer = file.writable.getWriter();
+          await writer.write(buffer);
+          await writer.close();
         },
         async removeItem(name) {
           await Deno.remove(name);
