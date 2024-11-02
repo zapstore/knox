@@ -75,7 +75,7 @@ export const store = createStore<KnoxState & KnoxActions>()(
           return { state, version: state.version };
         },
         async setItem(name, { state }) {
-          const data = JSON.stringify(state);
+          const data = JSON.stringify(state, null, 2);
           await Deno.writeTextFile(name, data);
         },
         async removeItem(name) {
