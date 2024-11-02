@@ -26,12 +26,15 @@ interface KnoxConnection {
   authorized_pubkey: string;
   /** Pubkey for this connection. Secret key is stored in the keyring. NIP-46 responses will be signed by this key. */
   bunker_ncryptsec: `ncryptsec1${string}`;
+  /** List of relays to connect to. */
+  relays: string[];
 }
 
 const connectionSchema: z.ZodType<KnoxConnection> = z.object({
   pubkey: n.id(),
   authorized_pubkey: n.id(),
   bunker_ncryptsec: n.bech32('ncryptsec'),
+  relays: z.string().url().array(),
 });
 
 interface KnoxState {
