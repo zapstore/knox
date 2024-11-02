@@ -105,10 +105,10 @@ export class KnoxStore {
 
     for (const key of this.store.getState().keys) {
       if (key.name === name) {
-        throw new Error(`Key with name "${name}" already exists.`);
+        throw new Error(`Secret key with name "${name}" already exists.`);
       }
       if (key.pubkey === pubkey) {
-        throw new Error(`Key with pubkey "${key.pubkey}" already exists.`);
+        throw new Error(`Secret key with pubkey "${key.pubkey}" already exists.`);
       }
     }
 

@@ -1,5 +1,6 @@
-import { program } from '@commander-js/extra-typings';
+import { Command, program } from '@commander-js/extra-typings';
 import { promptSecret } from '@std/cli';
+import chalk from 'chalk';
 import { generateSecretKey, nip19 } from 'nostr-tools';
 
 import { KnoxStore } from './store.ts';
@@ -18,7 +19,7 @@ knox.command('add')
     using store = new KnoxStore(file);
 
     const nsec = promptSecret('Enter secret key (leave blank to generate):');
-    
+
     let bytes: Uint8Array;
     if (!nsec) {
       bytes = generateSecretKey();
@@ -30,24 +31,30 @@ knox.command('add')
         }
         bytes = decoded.data;
       } catch {
-        return knox.error('Invalid secret key');
+        return cliError(knox, 'Invalid secret key');
       }
     }
 
     const password = promptSecret('Enter password:');
     if (!password) {
-      return knox.error('Password is required');
+      return cliError(knox, 'Password is required');
     }
 
     try {
       store.addKey(name, bytes, password);
     } catch (error) {
-      if (error instanceof Error) {
-        return knox.error(error.message);
-      } else {
-        throw error;
-      }
+      return cliError(knox, error);
     }
   });
+
+function cliError(command: Command, error: unknown): void {
+  if (typeof error === 'string') {
+    return command.error(chalk.red('error: ') + error);
+  }
+  if (error instanceof Error) {
+    return command.error(chalk.red('error: ') + error.message);
+  }
+  throw error;
+}
 
 knox.parse();
