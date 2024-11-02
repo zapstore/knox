@@ -1,4 +1,5 @@
 import { NSchema as n } from '@nostrify/nostrify';
+import { assertEquals } from '@std/assert/equals';
 import { produce } from 'immer';
 import { z } from 'zod';
 import { createStore } from 'zustand/vanilla';
@@ -70,15 +71,7 @@ export const store = createStore<KnoxState & KnoxActions>()(
       version: 1,
       storage: {
         async getItem(name) {
-          using file = await Deno.open(name, { read: true, write: true });
-          await file.lock();
-
-          const buffer = new Uint8Array();
-          while (await file.read(buffer) !== null) {
-            continue;
-          }
-
-          const text = new TextDecoder().decode(buffer);
+          const text = await Deno.readTextFile(name);
           const state = stateSchema.parse(JSON.parse(text));
 
           return { state, version: state.version };
@@ -101,3 +94,27 @@ export const store = createStore<KnoxState & KnoxActions>()(
     },
   ),
 );
+
+async function watch() {
+  const watcher = Deno.watchFs('bunker.json');
+
+  for await (const event of watcher) {
+    if (event.kind === 'modify') {
+      const text = await Deno.readTextFile('bunker.json');
+      const state = stateSchema.parse(JSON.parse(text));
+      try {
+        const { keys, connections, version } = store.getState();
+        assertEquals(state, { keys, connections, version });
+      } catch {
+        store.setState(state);
+      }
+    }
+  }
+}
+
+store.setState({}); // Create bunker.json if it doesn't exist
+watch();
+
+store.subscribe((state, _prevState) => {
+  console.log('State changed:', state);
+});
