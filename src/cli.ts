@@ -11,10 +11,10 @@ const knox = program
   .name('knox')
   .description('Nostr bunker with JSON storage.')
   .version('0.0.1')
-  .option('-f, --file <file>', 'Path to the bunker file', 'knox.bunker');
+  .option('-f, --file <file>', 'path to the bunker file', 'knox.bunker');
 
 knox.command('init')
-  .description('Initialize a new bunker')
+  .description('initialize a new bunker')
   .action(async () => {
     const { file } = knox.opts();
 
@@ -27,8 +27,8 @@ knox.command('init')
   });
 
 knox.command('add')
-  .description('Add a new key to the bunker')
-  .argument('<name>', 'Name of the key')
+  .description('add a new key to the bunker')
+  .argument('<name>', 'name of the key')
   .action(async (name) => {
     const { store } = await openStore();
 
@@ -54,10 +54,10 @@ knox.command('add')
   });
 
 knox.command('export')
-  .description('Export keys from the bunker')
-  .option('--format <format>', 'Output format (csv, jsonl)', 'csv')
-  .option('--keys', 'Output keys only')
-  .option('--insecure', 'Output keys without encryption (not recommended)')
+  .description('export keys from the bunker')
+  .option('--format <format>', 'output format (csv, jsonl)', 'csv')
+  .option('--keys', 'output keys only')
+  .option('--insecure', 'output keys without encryption (not recommended)')
   .action(async ({ format, keys: keysOnly, insecure }) => {
     if (!['csv', 'jsonl'].includes(format)) {
       throw new BunkerError(`Invalid format "${format}". Supported formats: csv, jsonl`);
@@ -124,6 +124,4 @@ try {
   } else {
     throw error;
   }
-} finally {
-  Deno.exit(1);
 }
