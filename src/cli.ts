@@ -2,8 +2,8 @@ import { Command, program } from '@commander-js/extra-typings';
 import { promptSecret } from '@std/cli';
 import chalk from 'chalk';
 import { generateSecretKey, nip19 } from 'nostr-tools';
-import * as nip49 from 'nostr-tools/nip49';
 
+import { BunkerCrypt } from './BunkerCrypt.ts';
 import { KnoxStore } from './store.ts';
 
 const knox = program
@@ -27,21 +27,16 @@ knox.command('init')
       return cliError(knox, 'Passphrase is required');
     }
 
-    await KnoxStore.createNew(file, passphrase);
+    const crypt = new BunkerCrypt(passphrase);
+
+    await KnoxStore.createNew(file, crypt);
   });
 
 knox.command('add')
   .description('Add a new key to the bunker')
   .argument('<name>', 'Name of the key')
   .action(async (name) => {
-    const { file } = knox.opts();
-
-    const passphrase = promptSecret('Enter unlock passphrase:', { clear: true });
-    if (!passphrase) {
-      return cliError(knox, 'Passphrase is required to unlock bunker');
-    }
-
-    using store = await KnoxStore.open(file, passphrase);
+    const { store } = await openStore();
 
     const key = promptSecret('Enter secret key (leave blank to generate):', { clear: true });
 
@@ -74,22 +69,15 @@ knox.command('export')
   .option('--keys', 'Output keys only')
   .option('--insecure', 'Output keys without encryption (not recommended)')
   .action(async ({ format, keys: keysOnly, insecure }) => {
-    const { file } = knox.opts();
-
     if (!['csv', 'jsonl'].includes(format)) {
       return cliError(knox, `Invalid format "${format}". Supported formats: csv, jsonl`);
     }
 
-    const passphrase = promptSecret('Enter unlock passphrase:', { clear: true });
-    if (!passphrase) {
-      return cliError(knox, 'Passphrase is required to unlock bunker');
-    }
-
-    using store = await KnoxStore.open(file, passphrase);
+    const { store, crypt } = await openStore();
 
     for (const key of store.listKeys()) {
       const name = key.name;
-      const sec = insecure ? key.sec : nip49.encrypt(nip19.decode(key.sec).data, passphrase);
+      const sec = insecure ? key.sec : crypt.encryptKey(nip19.decode(key.sec).data);
       const inserted_at = key.inserted_at.toISOString();
 
       if (keysOnly) {
@@ -107,6 +95,26 @@ knox.command('export')
       }
     }
   });
+
+async function openStore(): Promise<{ store: KnoxStore; crypt: BunkerCrypt }> {
+  const { file } = knox.opts();
+
+  const exists = await Deno.stat(file).then(() => true).catch(() => false);
+  if (!exists) {
+    cliError(knox, 'Bunker not found. Run "knox init" to create one, or pass "-f" to specify its location.');
+  }
+
+  const passphrase = promptSecret('Enter unlock passphrase:', { clear: true });
+  if (!passphrase) {
+    cliError(knox, 'Passphrase is required to unlock bunker');
+    Deno.exit(1); // TODO: rework error handling
+  }
+
+  const crypt = new BunkerCrypt(passphrase);
+  const store = await KnoxStore.open(file, crypt);
+
+  return { store, crypt };
+}
 
 function cliError(command: Command, error: unknown): void {
   if (typeof error === 'string') {

@@ -3,7 +3,7 @@ import { produce } from 'immer';
 import { z } from 'zod';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
-import { decrypt, encrypt } from './crypto.ts';
+import type { BunkerCrypt } from './BunkerCrypt.ts';
 
 interface KnoxKey {
   name: string;
@@ -49,10 +49,8 @@ const stateSchema: z.ZodType<KnoxState> = z.object({
 
 export class KnoxStore {
   private store: StoreApi<KnoxState>;
-  #passphrase: string;
 
-  constructor(private path: string, passphrase: string) {
-    this.#passphrase = passphrase;
+  constructor(private path: string, private crypt: BunkerCrypt) {
     this.store = this.createStore();
   }
 
@@ -88,15 +86,15 @@ export class KnoxStore {
     return this.store.getState().keys;
   }
 
-  static async createNew(path: string, passphrase: string): Promise<KnoxStore> {
-    const store = new KnoxStore(path, passphrase);
+  static async createNew(path: string, crypt: BunkerCrypt): Promise<KnoxStore> {
+    const store = new KnoxStore(path, crypt);
     await store.save({ write: true, createNew: true });
 
     return store;
   }
 
-  static async open(path: string, passphrase: string): Promise<KnoxStore> {
-    const store = new KnoxStore(path, passphrase);
+  static async open(path: string, crypt: BunkerCrypt): Promise<KnoxStore> {
+    const store = new KnoxStore(path, crypt);
     await store.load();
 
     return store;
@@ -104,7 +102,7 @@ export class KnoxStore {
 
   async load(opts?: Deno.ReadFileOptions): Promise<void> {
     const enc = await Deno.readFile(this.path, opts);
-    const dec = decrypt(enc, this.#passphrase);
+    const dec = this.crypt.decrypt(enc);
     const text = new TextDecoder().decode(dec);
     const state = stateSchema.parse(JSON.parse(text));
 
@@ -118,7 +116,7 @@ export class KnoxStore {
     const state = this.store.getState();
     const data = JSON.stringify(state, null, 2);
     const dec = new TextEncoder().encode(data);
-    const enc = encrypt(dec, this.#passphrase);
+    const enc = this.crypt.encrypt(dec);
 
     const writer = file.writable.getWriter();
     await file.truncate();
