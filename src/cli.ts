@@ -9,7 +9,7 @@ const knox = program
   .name('knox')
   .description('Nostr bunker with JSON storage.')
   .version('0.0.1')
-  .option('-f, --file <file>', 'Path to the bunker file', 'bunker.bin');
+  .option('-f, --file <file>', 'Path to the bunker file', 'knox.bunker');
 
 knox.command('init')
   .description('Initialize a new bunker')
