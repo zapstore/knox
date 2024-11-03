@@ -1,3 +1,5 @@
+import { DisposableBytes } from './DisposableBytes.ts';
+
 /**
  * Adds a level of obfuscation to binary values while they are in-memory.
  *
@@ -15,15 +17,16 @@ export class SaltedBytes {
 
   constructor(bytes: Uint8Array) {
     this.#salt = crypto.getRandomValues(new Uint8Array(bytes.length));
-    this.#data = new Uint8Array(bytes);
+    this.#data = bytes;
 
     for (let i = 0, len = this.#data.length; i < len; i++) {
       this.#data[i] ^= this.#salt[i];
     }
   }
 
-  getBytes(): Uint8Array {
-    const bytes = new Uint8Array(this.#data);
+  /** Get the original bytes. Supports `using` keyword to randomize the bytes after use. */
+  getBytes(): DisposableBytes {
+    const bytes = new DisposableBytes(this.#data);
 
     for (let i = bytes.length - 1; i >= 0; i--) {
       bytes[i] = this.#data[i] ^ this.#salt[i];
@@ -32,12 +35,8 @@ export class SaltedBytes {
     return bytes;
   }
 
-  dispose(): void {
+  [Symbol.dispose](): void {
     crypto.getRandomValues(this.#salt);
     crypto.getRandomValues(this.#data);
-  }
-
-  [Symbol.dispose](): void {
-    this.dispose();
   }
 }

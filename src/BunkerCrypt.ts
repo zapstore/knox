@@ -8,14 +8,14 @@ import { SaltedBytes } from './SaltedBytes.ts';
 
 /** Utilities for password encryption of data. */
 export class BunkerCrypt {
-  #saltedBytes: SaltedBytes;
+  #saltedPassphrase: SaltedBytes;
 
   constructor(passphrase: string) {
     const encoder = new TextEncoder();
     const normalized = passphrase.normalize('NFKC');
     const bytes = encoder.encode(normalized);
 
-    this.#saltedBytes = new SaltedBytes(bytes);
+    this.#saltedPassphrase = new SaltedBytes(bytes);
   }
 
   /** Encrypt bytes according to NIP-49 without bech32 encoding. */
@@ -24,9 +24,10 @@ export class BunkerCrypt {
     logn: number = 16,
     ksb: 0x00 | 0x01 | 0x02 = 0x02,
   ): Uint8Array {
+    using passphrase = this.#saltedPassphrase.getBytes();
     const salt = randomBytes(16);
     const n = 2 ** logn;
-    const key = scrypt(this.#saltedBytes.getBytes(), salt, { N: n, r: 8, p: 1, dkLen: 32 });
+    const key = scrypt(passphrase, salt, { N: n, r: 8, p: 1, dkLen: 32 });
     const nonce = randomBytes(24);
     const aad = Uint8Array.from([ksb]);
     const xc2p1 = xchacha20poly1305(key, nonce, aad);
@@ -50,7 +51,8 @@ export class BunkerCrypt {
     const aad = Uint8Array.from([ksb]);
     const ciphertext = enc.slice(2 + 16 + 24 + 1);
 
-    const key = scrypt(this.#saltedBytes.getBytes(), salt, { N: n, r: 8, p: 1, dkLen: 32 });
+    using passphrase = this.#saltedPassphrase.getBytes();
+    const key = scrypt(passphrase, salt, { N: n, r: 8, p: 1, dkLen: 32 });
     const xc2p1 = xchacha20poly1305(key, nonce, aad);
     return xc2p1.decrypt(ciphertext);
   }
@@ -69,6 +71,6 @@ export class BunkerCrypt {
   }
 
   [Symbol.dispose](): void {
-    this.#saltedBytes.dispose();
+    this.#saltedPassphrase[Symbol.dispose]();
   }
 }
