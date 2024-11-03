@@ -32,7 +32,13 @@ knox.command('add')
   .argument('<name>', 'Name of the key')
   .action((name) => {
     const { file } = knox.opts();
-    using store = new KnoxStore(file);
+
+    const passphrase = promptSecret('Enter passphrase:');
+    if (!passphrase) {
+      return cliError(knox, 'Passphrase is required');
+    }
+
+    using store = new KnoxStore(file, passphrase);
 
     const nsec = promptSecret('Enter secret key (leave blank to generate):');
 
@@ -51,13 +57,8 @@ knox.command('add')
       }
     }
 
-    const password = promptSecret('Enter password:');
-    if (!password) {
-      return cliError(knox, 'Password is required');
-    }
-
     try {
-      store.addKey(name, bytes, password);
+      store.addKey(name, bytes, passphrase);
     } catch (error) {
       return cliError(knox, error);
     }

@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { persist } from 'zustand/middleware';
 
+import { decrypt, encrypt } from './crypto.ts';
+
 interface KnoxKey {
   name: string;
   pubkey: string;
@@ -54,8 +56,10 @@ const stateSchema: z.ZodType<KnoxState> = z.object({
 export class KnoxStore {
   private store: StoreApi<KnoxState>;
   private watcher?: Deno.FsWatcher;
+  #passphrase: string;
 
-  constructor(private path: string) {
+  constructor(private path: string, passphrase: string) {
+    this.#passphrase = passphrase;
     this.store = this.createStore();
     this.store.setState({}); // Create bunker.json if it doesn't exist
     this.watch();
@@ -73,24 +77,27 @@ export class KnoxStore {
           name: this.path,
           version: 1,
           storage: {
-            getItem(name) {
-              const text = Deno.readTextFileSync(name);
+            getItem: (name) => {
+              const enc = Deno.readFileSync(name);
+              const dec = decrypt(enc, this.#passphrase);
+              const text = new TextDecoder().decode(dec);
               const state = stateSchema.parse(JSON.parse(text));
 
               return { state, version: state.version };
             },
-            async setItem(name, { state }) {
+            setItem: async (name, { state }) => {
               using file = await Deno.open(name, { write: true, create: true });
               await file.lock(true);
 
               const data = JSON.stringify(state, null, 2);
-              const buffer = new TextEncoder().encode(data);
+              const dec = new TextEncoder().encode(data);
+              const enc = encrypt(dec, this.#passphrase);
 
               const writer = file.writable.getWriter();
-              await writer.write(buffer);
+              await writer.write(enc);
               await writer.close();
             },
-            async removeItem(name) {
+            removeItem: async (name) => {
               await Deno.remove(name);
             },
           },
