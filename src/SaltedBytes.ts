@@ -1,0 +1,43 @@
+/**
+ * Adds a level of obfuscation to binary values while they are in-memory.
+ *
+ * The bytes are XORed with a random salt, which is stored alongside the data.
+ * The salt is used to reverse the operation and retrieve the original bytes.
+ * Finally, the data is zeroed out when disposed (either by calling `.dispose`
+ * or with the `using` keyword).
+ *
+ * Note that it's basically impossible to securely store secrets in memory in
+ * JavaScript, especially if the value was originally a string.
+ */
+export class SaltedBytes {
+  readonly #data: Uint8Array;
+  readonly #salt: Uint8Array;
+
+  constructor(bytes: Uint8Array) {
+    this.#salt = crypto.getRandomValues(new Uint8Array(bytes.length));
+    this.#data = new Uint8Array(bytes);
+
+    for (let i = 0, len = this.#data.length; i < len; i++) {
+      this.#data[i] ^= this.#salt[i];
+    }
+  }
+
+  getBytes(): Uint8Array {
+    const bytes = new Uint8Array(this.#data);
+
+    for (let i = bytes.length - 1; i >= 0; i--) {
+      bytes[i] = this.#data[i] ^ this.#salt[i];
+    }
+
+    return bytes;
+  }
+
+  dispose(): void {
+    crypto.getRandomValues(this.#salt);
+    crypto.getRandomValues(this.#data);
+  }
+
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
+}
