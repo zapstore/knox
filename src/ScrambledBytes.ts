@@ -11,7 +11,7 @@ import { DisposableBytes } from './DisposableBytes.ts';
  * Note that it's basically impossible to securely store secrets in memory in
  * JavaScript, especially if the value was originally a string.
  */
-export class SaltedBytes {
+export class ScrambledBytes {
   readonly #data: Uint8Array;
   readonly #salt: Uint8Array;
 
