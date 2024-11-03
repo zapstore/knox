@@ -18,18 +18,11 @@ knox.command('init')
   .action(async () => {
     const { file } = knox.opts();
 
-    const exists = await Deno.stat(file).then(() => true).catch(() => false);
-    if (exists) {
+    if (await fileExists(file)) {
       throw new BunkerError('Bunker file already exists');
     }
 
-    const passphrase = promptSecret('Enter a new passphrase:', { clear: true });
-    if (!passphrase) {
-      throw new BunkerError('Passphrase is required');
-    }
-
-    const crypt = new BunkerCrypt(passphrase);
-
+    const crypt = promptPassphrase('Enter a new passphrase:');
     await KnoxStore.createNew(file, crypt);
   });
 
@@ -93,25 +86,36 @@ knox.command('export')
     }
   });
 
+/** Prompt the user to unlock and open the store. Most subcommands (except `init`) call this. */
 async function openStore(): Promise<{ store: KnoxStore; crypt: BunkerCrypt }> {
   const { file } = knox.opts();
 
-  const exists = await Deno.stat(file).then(() => true).catch(() => false);
-  if (!exists) {
+  if (!await fileExists(file)) {
     throw new BunkerError('Bunker not found. Run "knox init" to create one, or pass "-f" to specify its location.');
   }
 
-  const passphrase = promptSecret('Enter unlock passphrase:', { clear: true });
-  if (!passphrase) {
-    throw new BunkerError('Passphrase is required to unlock bunker');
-  }
-
-  const crypt = new BunkerCrypt(passphrase);
+  const crypt = promptPassphrase('Enter unlock passphrase:');
   const store = await KnoxStore.open(file, crypt);
 
   return { store, crypt };
 }
 
+/** Prompt for the user's passphrase and return a BunkerCrypt instance. */
+function promptPassphrase(message: string): BunkerCrypt {
+  const passphrase = promptSecret(message, { clear: true });
+  if (!passphrase) {
+    throw new BunkerError('Passphrase is required');
+  }
+
+  return new BunkerCrypt(passphrase);
+}
+
+/** Check if a file exists. */
+async function fileExists(path: string): Promise<boolean> {
+  return await Deno.stat(path).then(() => true).catch(() => false);
+}
+
+// Process the command line arguments and run the program.
 try {
   await knox.parseAsync();
 } catch (error) {
