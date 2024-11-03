@@ -32,35 +32,36 @@ knox.command('init')
 knox.command('add')
   .description('Add a new key to the bunker')
   .argument('<name>', 'Name of the key')
-  .action((name) => {
+  .action(async (name) => {
     const { file } = knox.opts();
 
-    const passphrase = promptSecret('Enter passphrase:');
+    const passphrase = promptSecret('Enter unlock passphrase:');
     if (!passphrase) {
-      return cliError(knox, 'Passphrase is required');
+      return cliError(knox, 'Passphrase is required to unlock bunker');
     }
 
     using store = new KnoxStore(file, passphrase);
 
-    const nsec = promptSecret('Enter secret key (leave blank to generate):');
+    const key = promptSecret('Enter secret key (leave blank to generate):');
 
-    let bytes: Uint8Array;
-    if (!nsec) {
-      bytes = generateSecretKey();
+    let nsec: `nsec1${string}` | undefined;
+    if (!key) {
+      nsec = nip19.nsecEncode(generateSecretKey());
     } else {
       try {
-        const decoded = nip19.decode(nsec);
+        const decoded = nip19.decode(key);
         if (decoded.type !== 'nsec') {
           throw new Error('Invalid nsec');
         }
-        bytes = decoded.data;
+        nsec = nip19.nsecEncode(decoded.data);
       } catch {
         return cliError(knox, 'Invalid secret key');
       }
     }
 
     try {
-      store.addKey(name, bytes, passphrase);
+      store.addKey(name, nsec);
+      await store.save({ write: true });
     } catch (error) {
       return cliError(knox, error);
     }
