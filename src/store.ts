@@ -84,9 +84,20 @@ export class KnoxStore {
     });
   }
 
+  listKeys(): KnoxKey[] {
+    return this.store.getState().keys;
+  }
+
   static async createNew(path: string, passphrase: string): Promise<KnoxStore> {
     const store = new KnoxStore(path, passphrase);
     await store.save({ write: true, createNew: true });
+
+    return store;
+  }
+
+  static async open(path: string, passphrase: string): Promise<KnoxStore> {
+    const store = new KnoxStore(path, passphrase);
+    await store.load();
 
     return store;
   }
