@@ -11,6 +11,22 @@ const knox = program
   .version('0.0.1')
   .option('-f, --file <file>', 'Path to the bunker file', 'bunker.json');
 
+knox.command('init')
+  .description('Initialize a new bunker')
+  .action(async () => {
+    const { file } = knox.opts();
+
+    const exists = await Deno.stat(file).then(() => true).catch(() => false);
+    if (exists) {
+      return cliError(knox, 'Bunker file already exists');
+    }
+
+    const passphrase = promptSecret('Enter a new passphrase:');
+    if (!passphrase) {
+      return cliError(knox, 'Passphrase is required');
+    }
+  });
+
 knox.command('add')
   .description('Add a new key to the bunker')
   .argument('<name>', 'Name of the key')
@@ -57,4 +73,4 @@ function cliError(command: Command, error: unknown): void {
   throw error;
 }
 
-knox.parse();
+await knox.parseAsync();
