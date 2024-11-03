@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "cli": "deno run -A src/cli.ts"
+    "knox": "deno run -A src/cli.ts"
   },
   "imports": {
     "@commander-js/extra-typings": "npm:@commander-js/extra-typings@^12.1.0",
