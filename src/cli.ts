@@ -1,9 +1,10 @@
-import { Command, program } from '@commander-js/extra-typings';
+import { program } from '@commander-js/extra-typings';
 import { promptSecret } from '@std/cli';
 import chalk from 'chalk';
 import { generateSecretKey, nip19 } from 'nostr-tools';
 
 import { BunkerCrypt } from './BunkerCrypt.ts';
+import { BunkerError } from './BunkerError.ts';
 import { KnoxStore } from './store.ts';
 
 const knox = program
@@ -19,12 +20,12 @@ knox.command('init')
 
     const exists = await Deno.stat(file).then(() => true).catch(() => false);
     if (exists) {
-      return cliError(knox, 'Bunker file already exists');
+      throw new BunkerError('Bunker file already exists');
     }
 
     const passphrase = promptSecret('Enter a new passphrase:', { clear: true });
     if (!passphrase) {
-      return cliError(knox, 'Passphrase is required');
+      throw new BunkerError('Passphrase is required');
     }
 
     const crypt = new BunkerCrypt(passphrase);
@@ -51,16 +52,12 @@ knox.command('add')
         }
         nsec = nip19.nsecEncode(decoded.data);
       } catch {
-        return cliError(knox, 'Invalid secret key');
+        throw new BunkerError('Invalid secret key');
       }
     }
 
-    try {
-      store.addKey(name, nsec);
-      await store.save({ write: true });
-    } catch (error) {
-      return cliError(knox, error);
-    }
+    store.addKey(name, nsec);
+    await store.save({ write: true });
   });
 
 knox.command('export')
@@ -70,7 +67,7 @@ knox.command('export')
   .option('--insecure', 'Output keys without encryption (not recommended)')
   .action(async ({ format, keys: keysOnly, insecure }) => {
     if (!['csv', 'jsonl'].includes(format)) {
-      return cliError(knox, `Invalid format "${format}". Supported formats: csv, jsonl`);
+      throw new BunkerError(`Invalid format "${format}". Supported formats: csv, jsonl`);
     }
 
     const { store, crypt } = await openStore();
@@ -101,13 +98,12 @@ async function openStore(): Promise<{ store: KnoxStore; crypt: BunkerCrypt }> {
 
   const exists = await Deno.stat(file).then(() => true).catch(() => false);
   if (!exists) {
-    cliError(knox, 'Bunker not found. Run "knox init" to create one, or pass "-f" to specify its location.');
+    throw new BunkerError('Bunker not found. Run "knox init" to create one, or pass "-f" to specify its location.');
   }
 
   const passphrase = promptSecret('Enter unlock passphrase:', { clear: true });
   if (!passphrase) {
-    cliError(knox, 'Passphrase is required to unlock bunker');
-    Deno.exit(1); // TODO: rework error handling
+    throw new BunkerError('Passphrase is required to unlock bunker');
   }
 
   const crypt = new BunkerCrypt(passphrase);
@@ -116,14 +112,14 @@ async function openStore(): Promise<{ store: KnoxStore; crypt: BunkerCrypt }> {
   return { store, crypt };
 }
 
-function cliError(command: Command, error: unknown): void {
-  if (typeof error === 'string') {
-    return command.error(chalk.red('error: ') + error);
+try {
+  await knox.parseAsync();
+} catch (error) {
+  if (error instanceof BunkerError) {
+    console.error(chalk.red('error: ') + error.message);
+  } else {
+    throw error;
   }
-  if (error instanceof Error) {
-    return command.error(chalk.red('error: ') + error.message);
-  }
-  throw error;
+} finally {
+  Deno.exit(1);
 }
-
-await knox.parseAsync();

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
 import type { BunkerCrypt } from './BunkerCrypt.ts';
+import { BunkerError } from './BunkerError.ts';
 
 interface KnoxKey {
   name: string;
@@ -67,7 +68,7 @@ export class KnoxStore {
   addKey(name: string, sec: `nsec1${string}`): void {
     for (const key of this.store.getState().keys) {
       if (key.name === name) {
-        throw new Error(`Secret key with name "${name}" already exists.`);
+        throw new BunkerError(`Secret key with name "${name}" already exists.`);
       }
     }
 
