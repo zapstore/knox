@@ -61,7 +61,7 @@ export class KnoxStore {
   constructor(private path: string, passphrase: string) {
     this.#passphrase = passphrase;
     this.store = this.createStore();
-    this.store.setState({}); // Create bunker.json if it doesn't exist
+    this.store.setState({}); // Create bunker.bin if it doesn't exist
     this.watch();
   }
 
