@@ -1,12 +1,12 @@
 import { DisposableBytes } from './DisposableBytes.ts';
 
 /**
- * Adds a level of obfuscation to binary values while they are in-memory.
+ * Scrambles (mutates) the passed Uint8Array (and unscrambles it on demand) so
+ * it is obfuscated while in memory.
  *
  * The bytes are XORed with a random salt, which is stored alongside the data.
  * The salt is used to reverse the operation and retrieve the original bytes.
- * Finally, the data is zeroed out when disposed (either by calling `.dispose`
- * or with the `using` keyword).
+ * Finally, the data is zeroed out when disposed (with the `using` keyword).
  *
  * Note that it's basically impossible to securely store secrets in memory in
  * JavaScript, especially if the value was originally a string.
