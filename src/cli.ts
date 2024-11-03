@@ -22,7 +22,7 @@ knox.command('init')
       throw new BunkerError('Bunker file already exists');
     }
 
-    const crypt = promptPassphrase('Enter a new passphrase:');
+    using crypt = promptPassphrase('Enter a new passphrase:');
     await KnoxStore.createNew(file, crypt);
   });
 
@@ -30,7 +30,8 @@ knox.command('add')
   .description('add a new key to the bunker')
   .argument('<name>', 'name of the key')
   .action(async (name) => {
-    const { store } = await openStore();
+    using bunker = await openBunker();
+    const { store } = bunker;
 
     const key = promptSecret('Enter secret key (leave blank to generate):', { clear: true });
 
@@ -63,7 +64,8 @@ knox.command('export')
       throw new BunkerError(`Invalid format "${format}". Supported formats: csv, jsonl`);
     }
 
-    const { store, crypt } = await openStore();
+    using bunker = await openBunker();
+    const { store, crypt } = bunker;
 
     for (const key of store.listKeys()) {
       const name = key.name;
@@ -87,7 +89,7 @@ knox.command('export')
   });
 
 /** Prompt the user to unlock and open the store. Most subcommands (except `init`) call this. */
-async function openStore(): Promise<{ store: KnoxStore; crypt: BunkerCrypt }> {
+async function openBunker(): Promise<{ store: KnoxStore; crypt: BunkerCrypt; [Symbol.dispose]: () => void }> {
   const { file } = knox.opts();
 
   if (!await fileExists(file)) {
@@ -97,7 +99,14 @@ async function openStore(): Promise<{ store: KnoxStore; crypt: BunkerCrypt }> {
   const crypt = promptPassphrase('Enter unlock passphrase:');
   const store = await KnoxStore.open(file, crypt);
 
-  return { store, crypt };
+  return {
+    store,
+    crypt,
+    [Symbol.dispose]: () => {
+      store[Symbol.dispose]();
+      crypt[Symbol.dispose]();
+    },
+  };
 }
 
 /** Prompt for the user's passphrase and return a BunkerCrypt instance. */
