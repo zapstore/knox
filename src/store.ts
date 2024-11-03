@@ -1,11 +1,9 @@
 import { NSchema as n } from '@nostrify/nostrify';
-import { assertEquals } from '@std/assert/equals';
 import { produce } from 'immer';
 import { getPublicKey } from 'nostr-tools';
 import * as nip49 from 'nostr-tools/nip49';
 import { z } from 'zod';
 import { createStore, type StoreApi } from 'zustand/vanilla';
-import { persist } from 'zustand/middleware';
 
 import { decrypt, encrypt } from './crypto.ts';
 
@@ -55,54 +53,20 @@ const stateSchema: z.ZodType<KnoxState> = z.object({
 
 export class KnoxStore {
   private store: StoreApi<KnoxState>;
-  private watcher?: Deno.FsWatcher;
   #passphrase: string;
 
   constructor(private path: string, passphrase: string) {
     this.#passphrase = passphrase;
     this.store = this.createStore();
-    this.store.setState({}); // Create bunker.bin if it doesn't exist
-    this.watch();
   }
 
   createStore(): StoreApi<KnoxState> {
     return createStore<KnoxState>()(
-      persist(
-        (_setState) => ({
-          keys: [],
-          connections: [],
-          version: 1,
-        }),
-        {
-          name: this.path,
-          version: 1,
-          storage: {
-            getItem: (name) => {
-              const enc = Deno.readFileSync(name);
-              const dec = decrypt(enc, this.#passphrase);
-              const text = new TextDecoder().decode(dec);
-              const state = stateSchema.parse(JSON.parse(text));
-
-              return { state, version: state.version };
-            },
-            setItem: async (name, { state }) => {
-              using file = await Deno.open(name, { write: true, create: true });
-              await file.lock(true);
-
-              const data = JSON.stringify(state, null, 2);
-              const dec = new TextEncoder().encode(data);
-              const enc = encrypt(dec, this.#passphrase);
-
-              const writer = file.writable.getWriter();
-              await writer.write(enc);
-              await writer.close();
-            },
-            removeItem: async (name) => {
-              await Deno.remove(name);
-            },
-          },
-        },
-      ),
+      () => ({
+        keys: [],
+        connections: [],
+        version: 1,
+      }),
     );
   }
 
@@ -131,6 +95,36 @@ export class KnoxStore {
     });
   }
 
+  static async createNew(path: string, passphrase: string): Promise<KnoxStore> {
+    const store = new KnoxStore(path, passphrase);
+    await store.save({ write: true, createNew: true });
+
+    return store;
+  }
+
+  async load(opts?: Deno.ReadFileOptions): Promise<void> {
+    const enc = await Deno.readFile(this.path, opts);
+    const dec = decrypt(enc, this.#passphrase);
+    const text = new TextDecoder().decode(dec);
+    const state = stateSchema.parse(JSON.parse(text));
+
+    this.store.setState(state);
+  }
+
+  async save(opts?: Deno.OpenOptions): Promise<void> {
+    using file = await Deno.open(this.path, opts);
+    await file.lock(true);
+
+    const state = this.store.getState();
+    const data = JSON.stringify(state, null, 2);
+    const dec = new TextEncoder().encode(data);
+    const enc = encrypt(dec, this.#passphrase);
+
+    const writer = file.writable.getWriter();
+    await writer.write(enc);
+    await writer.close();
+  }
+
   /** Connect to a bunker using the authorization secret. */
   connect(connection: KnoxConnection): void {
     this.store.setState((state) => {
@@ -140,36 +134,11 @@ export class KnoxStore {
     });
   }
 
-  private async watch() {
-    // Wait for file to be ready.
-    while (!this.watcher) {
-      try {
-        this.watcher = Deno.watchFs(this.path);
-      } catch {
-        await new Promise<void>((resolve) => setTimeout(resolve, 100));
-      }
-    }
-
-    for await (const event of this.watcher) {
-      if (event.kind === 'modify') {
-        const text = await Deno.readTextFile(this.path);
-        const state = stateSchema.parse(JSON.parse(text));
-        try {
-          const { keys, connections, version } = this.store.getState();
-          assertEquals(state, { keys, connections, version });
-        } catch {
-          this.store.setState(state);
-        }
-      }
-    }
-  }
-
-  subscribe(listener: (state: KnoxState, prevState: KnoxState) => void): () => void {
+  listen(listener: (state: KnoxState, prevState: KnoxState) => void): () => void {
     return this.store.subscribe(listener);
   }
 
   close(): void {
-    this.watcher?.close();
   }
 
   [Symbol.dispose]() {

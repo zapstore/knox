@@ -25,6 +25,8 @@ knox.command('init')
     if (!passphrase) {
       return cliError(knox, 'Passphrase is required');
     }
+
+    await KnoxStore.createNew(file, passphrase);
   });
 
 knox.command('add')
