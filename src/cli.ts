@@ -130,6 +130,7 @@ try {
 } catch (error) {
   if (error instanceof BunkerError) {
     console.error(chalk.red('error: ') + error.message);
+    Deno.exit(1);
   } else {
     throw error;
   }
