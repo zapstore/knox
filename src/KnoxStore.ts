@@ -9,13 +9,13 @@ import { BunkerError } from './BunkerError.ts';
 interface KnoxKey {
   name: string;
   sec: `nsec1${string}`;
-  inserted_at: Date;
+  created_at: Date;
 }
 
 const keySchema: z.ZodType<KnoxKey> = z.object({
   name: z.string(),
   sec: n.bech32('nsec'),
-  inserted_at: z.coerce.date(),
+  created_at: z.coerce.date(),
 });
 
 interface KnoxConnection {
@@ -77,7 +77,7 @@ export class KnoxStore {
         draft.keys.push({
           name,
           sec,
-          inserted_at: new Date(),
+          created_at: new Date(),
         });
       });
     });

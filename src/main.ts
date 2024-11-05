@@ -70,7 +70,7 @@ knox.command('export')
     for (const key of store.listKeys()) {
       const name = key.name;
       const sec = insecure ? key.sec : crypt.encryptKey(nip19.decode(key.sec).data);
-      const inserted_at = key.inserted_at.toISOString();
+      const created_at = key.created_at.toISOString();
 
       if (keysOnly) {
         console.log(sec);
@@ -79,10 +79,10 @@ knox.command('export')
 
       switch (format) {
         case 'jsonl':
-          console.log(JSON.stringify({ name, sec, inserted_at }));
+          console.log(JSON.stringify({ name, sec, created_at }));
           break;
         case 'csv':
-          console.log(`${name},${sec},${inserted_at}`);
+          console.log(`${name},${sec},${created_at}`);
           break;
       }
     }

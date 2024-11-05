@@ -44,16 +44,18 @@ The JSON file is structured as follows:
 ```json
 {
   "version": 1,
-  "keys": {
-    "alex": {
+  "keys": [
+    {
+      "name": "alex",
       "sec": "nsec1...",
-      "created_at": 1730834557
+      "created_at": "2024-11-05T20:01:42.153Z"
     },
-    "patrick": {
+    {
+      "name": "patrick",
       "sec": "nsec1...",
-      "created_at": 1730834557
+      "created_at": "2024-11-05T20:01:42.153Z"
     }
-  }
+  ]
   // TODO
 }
 ```
