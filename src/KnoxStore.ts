@@ -1,21 +1,24 @@
 import { NSchema as n } from '@nostrify/nostrify';
 import { produce } from 'immer';
+import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools';
 import { z } from 'zod';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
 import type { BunkerCrypt } from './BunkerCrypt.ts';
 import { BunkerError } from './BunkerError.ts';
-import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools';
+import { ScrambledBytes } from './ScrambledBytes.ts';
+
+const scrambledBytesSchema = z.custom<ScrambledBytes>((value) => value instanceof ScrambledBytes);
 
 interface KnoxKey {
   name: string;
-  sec: `nsec1${string}`;
+  sec: ScrambledBytes;
   created_at: Date;
 }
 
 const keySchema: z.ZodType<KnoxKey> = z.object({
   name: z.string(),
-  sec: n.bech32('nsec'),
+  sec: scrambledBytesSchema,
   created_at: z.coerce.date(),
 });
 
@@ -25,7 +28,7 @@ interface KnoxAuthorization {
   relays: string[];
   authorized_pubkeys: string[];
   max_uses?: number;
-  bunker_sec: `nsec1${string}`;
+  bunker_sec: ScrambledBytes;
   created_at: Date;
   expires_at?: Date;
 }
@@ -36,7 +39,7 @@ const authorizationSchema: z.ZodType<KnoxAuthorization> = z.object({
   relays: z.string().url().array(),
   authorized_pubkeys: n.id().array(),
   max_uses: z.number().positive().int().optional(),
-  bunker_sec: n.bech32('nsec'),
+  bunker_sec: scrambledBytesSchema,
   created_at: z.coerce.date(),
   expires_at: z.coerce.date().optional(),
 });
@@ -70,7 +73,7 @@ export class KnoxStore {
     );
   }
 
-  addKey(name: string, sec: `nsec1${string}`): void {
+  addKey(name: string, sec: Uint8Array): void {
     for (const key of this.store.getState().keys) {
       if (key.name === name) {
         throw new BunkerError(`Key "${name}" already exists.`);
@@ -81,7 +84,7 @@ export class KnoxStore {
       return produce(state, (draft) => {
         draft.keys.push({
           name,
-          sec,
+          sec: new ScrambledBytes(sec),
           created_at: new Date(),
         });
       });
@@ -99,20 +102,22 @@ export class KnoxStore {
     }
 
     const secret = crypto.randomUUID();
-    const bunkerSec = generateSecretKey();
+
+    const bunkerSeckey = generateSecretKey();
+    const bunkerPubkey = getPublicKey(bunkerSeckey);
 
     const authorization: KnoxAuthorization = {
       key_name: key.name,
       secret,
       relays: opts.relays,
       authorized_pubkeys: [],
-      bunker_sec: nip19.nsecEncode(bunkerSec),
+      bunker_sec: new ScrambledBytes(bunkerSeckey),
       created_at: new Date(),
       expires_at: opts.expiresAt,
       max_uses: opts.maxUses,
     };
 
-    const uri = new URL(`bunker://${getPublicKey(bunkerSec)}`);
+    const uri = new URL(`bunker://${bunkerPubkey}`);
 
     for (const relay of opts.relays) {
       uri.searchParams.append('relay', relay);
@@ -147,7 +152,7 @@ export class KnoxStore {
     const enc = await Deno.readFile(this.path, opts);
     const dec = this.crypt.decrypt(enc);
     const text = new TextDecoder().decode(dec);
-    const state = stateSchema.parse(JSON.parse(text));
+    const state = stateSchema.parse(JSON.parse(text, this.reviver));
 
     this.store.setState(state);
   }
@@ -157,7 +162,7 @@ export class KnoxStore {
     await file.lock(true);
 
     const state = this.store.getState();
-    const data = JSON.stringify(state, null, 2);
+    const data = JSON.stringify(state, this.replacer, 2);
     const dec = new TextEncoder().encode(data);
     const enc = this.crypt.encrypt(dec);
 
@@ -165,6 +170,24 @@ export class KnoxStore {
     await file.truncate();
     await writer.write(enc);
     await writer.close();
+  }
+
+  private reviver(_key: string, value: unknown): unknown {
+    if (typeof value === 'string' && value.startsWith('nsec1')) {
+      const { data: bytes } = nip19.decode(value as `nsec1${string}`);
+      return new ScrambledBytes(bytes);
+    }
+
+    return value;
+  }
+
+  private replacer(_key: string, value: unknown): unknown {
+    if (value instanceof ScrambledBytes) {
+      using bytes = value.unscrambled();
+      return nip19.nsecEncode(bytes);
+    }
+
+    return value;
   }
 
   listen(listener: (state: KnoxState, prevState: KnoxState) => void): () => void {

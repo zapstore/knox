@@ -35,22 +35,22 @@ knox.command('add')
 
     const key = promptSecret('Enter secret key (leave blank to generate):', { clear: true });
 
-    let nsec: `nsec1${string}` | undefined;
+    let sec: Uint8Array | undefined;
     if (!key) {
-      nsec = nip19.nsecEncode(generateSecretKey());
+      sec = generateSecretKey();
     } else {
       try {
         const decoded = nip19.decode(key);
         if (decoded.type !== 'nsec') {
           throw new Error('Invalid nsec');
         }
-        nsec = nip19.nsecEncode(decoded.data);
+        sec = decoded.data;
       } catch {
         throw new BunkerError('Invalid secret key');
       }
     }
 
-    store.addKey(name, nsec);
+    store.addKey(name, sec);
     await store.save({ write: true });
   });
 
@@ -111,8 +111,10 @@ knox.command('export')
     const { store, crypt } = bunker;
 
     for (const key of store.listKeys()) {
+      using bytes = key.sec.unscrambled();
+
       const name = key.name;
-      const sec = insecure ? key.sec : crypt.encryptKey(nip19.decode(key.sec).data);
+      const sec = insecure ? nip19.nsecEncode(bytes) : crypt.encryptKey(bytes);
       const created_at = key.created_at.toISOString();
 
       if (keysOnly) {
