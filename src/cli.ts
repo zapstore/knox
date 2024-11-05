@@ -5,7 +5,7 @@ import { generateSecretKey, nip19 } from 'nostr-tools';
 
 import { BunkerCrypt } from './BunkerCrypt.ts';
 import { BunkerError } from './BunkerError.ts';
-import { KnoxStore } from './store.ts';
+import { KnoxStore } from './KnoxStore.ts';
 
 const knox = program
   .name('knox')
