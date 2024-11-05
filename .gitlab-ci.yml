@@ -1,0 +1,19 @@
+image: denoland/deno:2.0.4
+
+default:
+  interruptible: true
+
+stages:
+  - build
+
+build:
+  stage: build
+  script:
+    - deno fmt --check
+    - deno lint
+    - deno task test
+    - deno task build
+  artifacts:
+    when: always
+    paths:
+      - knox
