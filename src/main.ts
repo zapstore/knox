@@ -54,6 +54,49 @@ knox.command('add')
     await store.save({ write: true });
   });
 
+knox.command('uri')
+  .description('generate a bunker URI for a key')
+  .argument('<name>', 'name of the key')
+  .argument('<relay...>', 'relays to use')
+  .option('--expires <date>', 'expiration date')
+  .option('--uses <count>', 'maximum number of uses', '1')
+  .action(async (name, relays, opts) => {
+    if (opts.expires && !Date.parse(opts.expires)) {
+      throw new BunkerError('Invalid expiration date');
+    }
+    if (opts.uses && !Number.isInteger(Number(opts.uses))) {
+      throw new BunkerError('Invalid number of uses');
+    }
+    relays = relays.map((relay) => {
+      try {
+        const url = new URL(relay);
+        if (url.protocol !== 'wss:') {
+          throw new Error('Invalid protocol');
+        }
+        return url.toString();
+      } catch {
+        throw new BunkerError(`Invalid relay URL "${relay}"`);
+      }
+    });
+
+    using bunker = await openBunker();
+    const { store } = bunker;
+
+    const key = store.listKeys().find((key) => key.name === name);
+    if (!key) {
+      throw new BunkerError(`Key "${name}" not found`);
+    }
+
+    const uri = store.generateUri({
+      name,
+      relays,
+      maxUses: opts.uses ? Number(opts.uses) : undefined,
+      expiresAt: opts.expires ? new Date(opts.expires) : undefined,
+    });
+
+    console.log(uri.toString());
+  });
+
 knox.command('export')
   .description('export keys from the bunker')
   .option('--format <format>', 'output format (csv, jsonl)', 'csv')

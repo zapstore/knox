@@ -5,6 +5,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 
 import type { BunkerCrypt } from './BunkerCrypt.ts';
 import { BunkerError } from './BunkerError.ts';
+import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools';
 
 interface KnoxKey {
   name: string;
@@ -18,33 +19,37 @@ const keySchema: z.ZodType<KnoxKey> = z.object({
   created_at: z.coerce.date(),
 });
 
-interface KnoxConnection {
-  /** User pubkey. Events will be signed by this pubkey. */
-  pubkey: string;
-  /** Pubkey of the app authorized to sign events with this connection. */
-  authorized_pubkey: string;
-  /** Pubkey for this connection. Secret key is stored in the keyring. NIP-46 responses will be signed by this key. */
-  bunker_sec: `nsec1${string}`;
-  /** List of relays to connect to. */
+interface KnoxAuthorization {
+  key_name: string;
+  secret: string;
   relays: string[];
+  authorized_pubkeys: string[];
+  max_uses?: number;
+  bunker_sec: `nsec1${string}`;
+  created_at: Date;
+  expires_at?: Date;
 }
 
-const connectionSchema: z.ZodType<KnoxConnection> = z.object({
-  pubkey: n.id(),
-  authorized_pubkey: n.id(),
-  bunker_sec: n.bech32('nsec'),
+const authorizationSchema: z.ZodType<KnoxAuthorization> = z.object({
+  key_name: z.string(),
+  secret: z.string(),
   relays: z.string().url().array(),
+  authorized_pubkeys: n.id().array(),
+  max_uses: z.number().positive().int().optional(),
+  bunker_sec: n.bech32('nsec'),
+  created_at: z.coerce.date(),
+  expires_at: z.coerce.date().optional(),
 });
 
 interface KnoxState {
   keys: KnoxKey[];
-  connections: KnoxConnection[];
+  authorizations: KnoxAuthorization[];
   version: number;
 }
 
 const stateSchema: z.ZodType<KnoxState> = z.object({
   keys: keySchema.array(),
-  connections: connectionSchema.array(),
+  authorizations: authorizationSchema.array(),
   version: z.number().positive(),
 });
 
@@ -59,7 +64,7 @@ export class KnoxStore {
     return createStore<KnoxState>()(
       () => ({
         keys: [],
-        connections: [],
+        authorizations: [],
         version: 1,
       }),
     );
@@ -68,7 +73,7 @@ export class KnoxStore {
   addKey(name: string, sec: `nsec1${string}`): void {
     for (const key of this.store.getState().keys) {
       if (key.name === name) {
-        throw new BunkerError(`Secret key with name "${name}" already exists.`);
+        throw new BunkerError(`Key "${name}" already exists.`);
       }
     }
 
@@ -85,6 +90,43 @@ export class KnoxStore {
 
   listKeys(): KnoxKey[] {
     return this.store.getState().keys;
+  }
+
+  generateUri(opts: { name: string; relays: string[]; maxUses?: number; expiresAt?: Date }): URL {
+    const key = this.store.getState().keys.find((key) => key.name === opts.name);
+    if (!key) {
+      throw new BunkerError(`Key "${opts.name}" not found.`);
+    }
+
+    const secret = crypto.randomUUID();
+    const bunkerSec = generateSecretKey();
+
+    const authorization: KnoxAuthorization = {
+      key_name: key.name,
+      secret,
+      relays: opts.relays,
+      authorized_pubkeys: [],
+      bunker_sec: nip19.nsecEncode(bunkerSec),
+      created_at: new Date(),
+      expires_at: opts.expiresAt,
+      max_uses: opts.maxUses,
+    };
+
+    const uri = new URL(`bunker://${getPublicKey(bunkerSec)}`);
+
+    for (const relay of opts.relays) {
+      uri.searchParams.append('relay', relay);
+    }
+
+    uri.searchParams.set('secret', secret);
+
+    this.store.setState((state) => {
+      return produce(state, (draft) => {
+        draft.authorizations.push(authorization);
+      });
+    });
+
+    return uri;
   }
 
   static async createNew(path: string, crypt: BunkerCrypt): Promise<KnoxStore> {
@@ -123,15 +165,6 @@ export class KnoxStore {
     await file.truncate();
     await writer.write(enc);
     await writer.close();
-  }
-
-  /** Connect to a bunker using the authorization secret. */
-  connect(connection: KnoxConnection): void {
-    this.store.setState((state) => {
-      return produce(state, (draft) => {
-        draft.connections.push(connection);
-      });
-    });
   }
 
   listen(listener: (state: KnoxState, prevState: KnoxState) => void): () => void {
