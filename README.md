@@ -10,7 +10,12 @@ Knox is a command-line Nostr bunker built with Deno.
 
 ## Getting Started
 
-You can download (TODO) a compiled binary and put it in your PATH.
+To install, download the `knox` binary and make it executable:
+
+```sh
+wget -O ~/bin/knox https://gitlab.com/soapbox-pub/knox/-/jobs/artifacts/main/raw/knox?job=compile
+chmod +x ~/bin/knox
+```
 
 To create your first bunker, run:
 
