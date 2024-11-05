@@ -24,7 +24,7 @@ export class BunkerCrypt {
     logn: number = 16,
     ksb: 0x00 | 0x01 | 0x02 = 0x02,
   ): Uint8Array {
-    using passphrase = this.#scrambled.unscrambled();
+    using passphrase = this.#scrambled.unscramble();
     const salt = randomBytes(16);
     const n = 2 ** logn;
     const key = scrypt(passphrase, salt, { N: n, r: 8, p: 1, dkLen: 32 });
@@ -51,7 +51,7 @@ export class BunkerCrypt {
     const aad = Uint8Array.from([ksb]);
     const ciphertext = enc.slice(2 + 16 + 24 + 1);
 
-    using passphrase = this.#scrambled.unscrambled();
+    using passphrase = this.#scrambled.unscramble();
     const key = scrypt(passphrase, salt, { N: n, r: 8, p: 1, dkLen: 32 });
     const xc2p1 = xchacha20poly1305(key, nonce, aad);
     return xc2p1.decrypt(ciphertext);

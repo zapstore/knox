@@ -25,7 +25,7 @@ export class ScrambledBytes {
   }
 
   /** Get the original bytes. Supports `using` keyword to randomize the bytes after use. */
-  unscrambled(): DisposableBytes {
+  unscramble(): DisposableBytes {
     const bytes = new DisposableBytes(this.#data);
 
     for (let i = bytes.length - 1; i >= 0; i--) {

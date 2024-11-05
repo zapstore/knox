@@ -12,7 +12,7 @@ Deno.test('ScrambledBytes', () => {
 
   let ref: DisposableBytes;
   (() => {
-    using unscrambled = scrambled.unscrambled();
+    using unscrambled = scrambled.unscramble();
     assertEquals(unscrambled, new DisposableBytes(32));
     ref = unscrambled;
   })();

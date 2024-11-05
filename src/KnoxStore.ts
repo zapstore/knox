@@ -183,7 +183,7 @@ export class KnoxStore {
 
   private replacer(_key: string, value: unknown): unknown {
     if (value instanceof ScrambledBytes) {
-      using bytes = value.unscrambled();
+      using bytes = value.unscramble();
       return nip19.nsecEncode(bytes);
     }
 

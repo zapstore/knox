@@ -111,7 +111,7 @@ knox.command('export')
     const { store, crypt } = bunker;
 
     for (const key of store.listKeys()) {
-      using bytes = key.sec.unscrambled();
+      using bytes = key.sec.unscramble();
 
       const name = key.name;
       const sec = insecure ? nip19.nsecEncode(bytes) : crypt.encryptKey(bytes);
