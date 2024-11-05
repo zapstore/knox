@@ -2,7 +2,8 @@
   "tasks": {
     "knox": "deno run -A src/main.ts",
     "compile": "deno compile -A -o knox src/main.ts",
-    "test": "deno test -A"
+    "test": "deno test -A",
+    "debug": "deno run -A scripts/debug.ts"
   },
   "imports": {
     "@commander-js/extra-typings": "npm:@commander-js/extra-typings@^12.1.0",
