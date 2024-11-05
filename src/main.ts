@@ -58,8 +58,8 @@ knox.command('uri')
   .description('generate a bunker URI for a key')
   .argument('<name>', 'name of the key')
   .argument('<relay...>', 'relays to use')
+  .option('-n, --uses <count>', 'maximum number of uses', '1')
   .option('--expires <date>', 'expiration date')
-  .option('--uses <count>', 'maximum number of uses', '1')
   .action(async (name, relays, opts) => {
     if (opts.expires && !Date.parse(opts.expires)) {
       throw new BunkerError('Invalid expiration date');
