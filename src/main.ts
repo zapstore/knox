@@ -94,7 +94,69 @@ knox.command('uri')
       expiresAt: opts.expires ? new Date(opts.expires) : undefined,
     });
 
+    await store.save({ write: true });
     console.log(uri.toString());
+  });
+
+knox.command('status')
+  .description('show the status of the bunker')
+  .action(async () => {
+    using bunker = await openBunker();
+    const { store } = bunker;
+
+    function printKey(name: string, tags: string[]) {
+      if (tags.length) {
+        console.log(chalk.bold(name), chalk.gray('(') + tags.join(chalk.gray(', ')) + chalk.gray(')'));
+      } else {
+        console.log(chalk.bold(name));
+      }
+    }
+
+    for (const key of store.listKeys()) {
+      const tags: string[] = [];
+      const authorizations = store.getAuthorizations(key.name);
+
+      if (!authorizations.length) {
+        printKey(key.name, [chalk.gray('new')]);
+        continue;
+      }
+
+      let unusedUris = 0;
+      let unusedSlots = 0;
+      let hasUnlimited = false;
+
+      for (const { authorized_pubkeys, max_uses } of authorizations) {
+        if (typeof max_uses !== 'number') {
+          hasUnlimited = true;
+          break;
+        }
+        if (!authorized_pubkeys.length) {
+          unusedUris++;
+        }
+
+        unusedSlots += Math.max(0, max_uses - authorized_pubkeys.length);
+      }
+
+      if (hasUnlimited) {
+        printKey(key.name, [chalk.yellow('unlimited')]);
+        continue;
+      }
+
+      if (unusedUris) {
+        tags.push(chalk.yellow(`${unusedUris} unused URIs`));
+      }
+
+      if (unusedSlots && unusedSlots !== unusedUris) {
+        tags.push(chalk.yellow(`${unusedSlots} unused slots`));
+      }
+
+      if (!tags.length) {
+        printKey(key.name, [chalk.green('connected')]);
+        continue;
+      }
+
+      printKey(key.name, tags);
+    }
   });
 
 knox.command('export')

@@ -134,6 +134,10 @@ export class KnoxStore {
     return uri;
   }
 
+  getAuthorizations(keyName: string): KnoxAuthorization[] {
+    return this.store.getState().authorizations.filter((auth) => auth.key_name === keyName);
+  }
+
   static async createNew(path: string, crypt: BunkerCrypt): Promise<KnoxStore> {
     const store = new KnoxStore(path, crypt);
     await store.save({ write: true, createNew: true });
