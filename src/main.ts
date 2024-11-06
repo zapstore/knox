@@ -6,6 +6,8 @@ import { generateSecretKey, nip19 } from 'nostr-tools';
 import { BunkerCrypt } from './BunkerCrypt.ts';
 import { BunkerError } from './BunkerError.ts';
 import { KnoxStore } from './KnoxStore.ts';
+import { NPool, NRelay1, NSecSigner } from '@nostrify/nostrify';
+import { NBunker } from './NBunker.ts';
 
 const knox = program
   .name('knox')
@@ -114,7 +116,7 @@ knox.command('status')
 
     for (const key of store.listKeys()) {
       const tags: string[] = [];
-      const authorizations = store.getAuthorizations(key.name);
+      const authorizations = store.getAuthorizations().filter((auth) => auth.key_name === key.name);
 
       if (!authorizations.length) {
         printKey(key.name, [chalk.gray('new')]);
@@ -156,6 +158,64 @@ knox.command('status')
       }
 
       printKey(key.name, tags);
+    }
+  });
+
+knox.command('start')
+  .description('start the bunker daemon')
+  .action(async () => {
+    using bunker = await openBunker();
+    const { store } = bunker;
+
+    console.log('Starting bunker daemon...');
+    console.log('Press Ctrl+C to stop.');
+    console.log();
+
+    const pool = new NPool({
+      open: (url) => new NRelay1(url),
+      eventRouter: (_event) => Promise.resolve([]),
+      reqRouter: (_filters) => Promise.resolve(new Map()),
+    });
+
+    for (const authorization of store.getAuthorizations()) {
+      const key = store.getKey(authorization.key_name);
+      if (!key) {
+        console.error(`Key "${authorization.key_name}" not found`);
+        continue;
+      }
+
+      // FIXME: Keys should be scrambled or encrypted in memory.
+      const userSigner = new NSecSigner(key.sec.unscramble());
+      const bunkerSigner = new NSecSigner(authorization.bunker_sec.unscramble());
+
+      const relay = new NPool({
+        open: (url) => pool.relay(url),
+        eventRouter: () => Promise.resolve(authorization.relays),
+        reqRouter: (filters) => Promise.resolve(new Map(authorization.relays.map((relay) => [relay, filters]))),
+      });
+
+      const bunker = new NBunker({
+        relay,
+        bunkerSigner,
+        userSigner,
+        onConnect(request, event) {
+          const [, secret] = request.params;
+
+          if (secret === authorization.secret) {
+            bunker.authorize(event.pubkey);
+            return { id: request.id, result: 'ack' };
+          } else {
+            return { id: request.id, result: '', error: 'Invalid secret' };
+          }
+        },
+        onError(error) {
+          console.error(error);
+        },
+      });
+
+      for (const pubkey of authorization.authorized_pubkeys) {
+        bunker.authorize(pubkey);
+      }
     }
   });
 

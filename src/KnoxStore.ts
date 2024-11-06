@@ -95,6 +95,10 @@ export class KnoxStore {
     return this.store.getState().keys;
   }
 
+  getKey(name: string): KnoxKey | undefined {
+    return this.store.getState().keys.find((key) => key.name === name);
+  }
+
   generateUri(opts: { name: string; relays: string[]; maxUses?: number; expiresAt?: Date }): URL {
     const key = this.store.getState().keys.find((key) => key.name === opts.name);
     if (!key) {
@@ -134,8 +138,8 @@ export class KnoxStore {
     return uri;
   }
 
-  getAuthorizations(keyName: string): KnoxAuthorization[] {
-    return this.store.getState().authorizations.filter((auth) => auth.key_name === keyName);
+  getAuthorizations(): KnoxAuthorization[] {
+    return this.store.getState().authorizations;
   }
 
   static async createNew(path: string, crypt: BunkerCrypt): Promise<KnoxStore> {
