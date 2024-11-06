@@ -6,6 +6,7 @@ import { generateSecretKey, nip19 } from 'nostr-tools';
 
 import { BunkerCrypt } from './BunkerCrypt.ts';
 import { BunkerError } from './BunkerError.ts';
+import { KnoxFS } from './KnoxFS.ts';
 import { KnoxStore } from './KnoxStore.ts';
 import { NBunker } from './NBunker.ts';
 
@@ -31,7 +32,7 @@ knox.command('init')
     const store = new KnoxStore(file, crypt);
     const state = store.getState();
 
-    await KnoxStore.writeBunker(file, state, crypt);
+    await KnoxFS.write(file, state, crypt);
   });
 
 knox.command('add')

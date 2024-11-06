@@ -1,0 +1,51 @@
+import { nip19 } from 'nostr-tools';
+
+import { BunkerCrypt } from './BunkerCrypt.ts';
+import { KnoxState, stateSchema } from './KnoxState.ts';
+import { ScrambledBytes } from './ScrambledBytes.ts';
+
+export class KnoxFS {
+  /** Low-level function to read the bunker file. */
+  static async read(file: Deno.FsFile, crypt: BunkerCrypt): Promise<KnoxState> {
+    const response = new Response(file.readable);
+    const buffer = await response.arrayBuffer();
+
+    const enc = new Uint8Array(buffer);
+    const dec = crypt.decrypt(enc);
+
+    const text = new TextDecoder().decode(dec);
+    const data = JSON.parse(text, KnoxFS.reviver);
+
+    return stateSchema.parse(data);
+  }
+
+  /** Low-level function to write the bunker file. */
+  static async write(file: Deno.FsFile, state: KnoxState, crypt: BunkerCrypt): Promise<void> {
+    const data = JSON.stringify(state, KnoxFS.replacer, 2);
+    const dec = new TextEncoder().encode(data);
+    const enc = crypt.encrypt(dec);
+
+    const writer = file.writable.getWriter();
+    await file.truncate();
+    await writer.write(enc);
+    await writer.close();
+  }
+
+  private static reviver(_key: string, value: unknown): unknown {
+    if (typeof value === 'string' && value.startsWith('nsec1')) {
+      const { data: bytes } = nip19.decode(value as `nsec1${string}`);
+      return new ScrambledBytes(bytes);
+    }
+
+    return value;
+  }
+
+  private static replacer(_key: string, value: unknown): unknown {
+    if (value instanceof ScrambledBytes) {
+      using bytes = value.unscramble();
+      return nip19.nsecEncode(bytes);
+    }
+
+    return value;
+  }
+}
