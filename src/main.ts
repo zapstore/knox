@@ -170,7 +170,7 @@ knox.command('status')
 knox.command('start')
   .description('start the bunker daemon')
   .action(async () => {
-    using bunker = await openBunker();
+    const bunker = await openBunker();
     const { store, save } = bunker;
 
     if (!store.authorizations.length) {
@@ -238,10 +238,6 @@ knox.command('start')
         bunker.authorize(pubkey);
       }
     }
-
-    // Wait until killed.
-    // HACK: Watch the file instead and the program wont close automatically.
-    await new Promise(() => {});
   });
 
 knox.command('export')
