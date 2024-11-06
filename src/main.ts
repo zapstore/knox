@@ -173,6 +173,11 @@ knox.command('start')
     using bunker = await openBunker();
     const { save, store } = bunker;
 
+    if (!store.authorizations.length) {
+      console.error('No authorizations found. Run "knox uri" to generate one.');
+      return;
+    }
+
     console.log('Starting bunker daemon...');
     console.log('Press Ctrl+C to stop.');
 
