@@ -25,6 +25,17 @@ export class KnoxFS {
     await Deno.writeFile(path, enc);
   }
 
+  /** Update the state of the bunker file. */
+  static async update(path: string, crypt: BunkerCrypt, update: (state: KnoxState) => KnoxState): Promise<void> {
+    using file = await Deno.open(path, { write: true });
+    await file.lock(true);
+
+    const prevState = await KnoxFS.read(path, crypt);
+    const nextState = update(prevState);
+
+    await KnoxFS.write(path, nextState, crypt);
+  }
+
   private static reviver(_key: string, value: unknown): unknown {
     if (typeof value === 'string' && value.startsWith('nsec1')) {
       const { data: bytes } = nip19.decode(value as `nsec1${string}`);
