@@ -124,7 +124,7 @@ knox.command('status')
 
     for (const key of store.keys) {
       const tags: string[] = [];
-      const authorizations = store.authorizations.filter((auth) => auth.key_name === key.name);
+      const authorizations = store.authorizations.filter((auth) => auth.key === key.name);
 
       if (!authorizations.length) {
         printKey(key.name, [chalk.dim('new')]);
@@ -200,9 +200,9 @@ knox.command('start')
 
     // Loop through all authorizations and create a bunker instance for each.
     for (const authorization of store.authorizations) {
-      const key = store.getKey(authorization.key_name);
+      const key = store.getKey(authorization.key);
       if (!key) {
-        console.error(`Key "${authorization.key_name}" not found`);
+        console.error(`Key "${authorization.key}" not found`);
         continue;
       }
 
@@ -263,7 +263,7 @@ knox.command('start')
 
       console.log(
         chalk.green('up'),
-        chalk.bold(authorization.key_name),
+        chalk.bold(authorization.key),
         chalk.dim(authorization.secret),
         chalk.dim(authorization.relays.join(', ')),
       );
@@ -300,9 +300,9 @@ knox.command('start')
             continue;
           }
 
-          const key = state.keys.find((key) => key.name === authorization.key_name);
+          const key = state.keys.find((key) => key.name === authorization.key);
           if (!key) {
-            console.error(`Key "${authorization.key_name}" not found`);
+            console.error(`Key "${authorization.key}" not found`);
             continue;
           }
 
@@ -319,7 +319,7 @@ knox.command('start')
           if (authorization) {
             console.log(
               chalk.green('down'),
-              chalk.bold(authorization.key_name),
+              chalk.bold(authorization.key),
               chalk.dim(authorization.secret),
               chalk.dim(authorization.relays.join(', ')),
             );

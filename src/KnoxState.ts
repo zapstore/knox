@@ -18,7 +18,7 @@ const keySchema: z.ZodType<KnoxKey> = z.object({
 });
 
 export interface KnoxAuthorization {
-  key_name: string;
+  key: string;
   secret: string;
   relays: string[];
   pubkeys: string[];
@@ -29,7 +29,7 @@ export interface KnoxAuthorization {
 }
 
 const authorizationSchema: z.ZodType<KnoxAuthorization> = z.object({
-  key_name: z.string(),
+  key: z.string(),
   secret: z.string(),
   relays: z.string().url().array().transform((relays) => [...new Set(relays)]),
   pubkeys: n.id().array().transform((pubkeys) => [...new Set(pubkeys)]),
@@ -67,7 +67,7 @@ export const stateSchema: z.ZodType<KnoxState, z.ZodTypeDef, unknown> = z.object
       return false;
     }
     // Remove authorizations with missing keys.
-    const key = state.keys.find((key) => key.name === auth.key_name);
+    const key = state.keys.find((key) => key.name === auth.key);
     if (!key) {
       return false;
     }

@@ -66,7 +66,7 @@ export class KnoxStore {
     const bunkerPubkey = getPublicKey(bunkerSeckey);
 
     const authorization: KnoxAuthorization = {
-      key_name: key.name,
+      key: key.name,
       secret,
       relays: opts.relays,
       pubkeys: [],
