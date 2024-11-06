@@ -207,8 +207,22 @@ export class KnoxStore {
     return value;
   }
 
-  listen(listener: (state: KnoxState, prevState: KnoxState) => void): () => void {
-    return this.store.subscribe(listener);
+  listen(
+    listener: (state: KnoxState, prevState: KnoxState) => void,
+    opts?: { signal?: AbortSignal },
+  ): { close: () => void; [Symbol.dispose]: () => void } {
+    const close = this.store.subscribe(listener);
+    opts?.signal?.addEventListener('abort', onClose);
+
+    function onClose() {
+      opts?.signal?.removeEventListener('abort', onClose);
+      close();
+    }
+
+    return {
+      close,
+      [Symbol.dispose]: close,
+    };
   }
 
   close(): void {

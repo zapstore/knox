@@ -169,7 +169,6 @@ knox.command('start')
 
     console.log('Starting bunker daemon...');
     console.log('Press Ctrl+C to stop.');
-    console.log();
 
     const pool = new NPool({
       open: (url) => new NRelay1(url),
@@ -198,25 +197,26 @@ knox.command('start')
         relay,
         bunkerSigner,
         userSigner,
-        onConnect(request, event) {
+        async onConnect(request, event) {
           const [, secret] = request.params;
 
           if (secret === authorization.secret) {
             bunker.authorize(event.pubkey);
             store.authorize(event.pubkey, secret);
+            await store.save({ write: true });
             return { id: request.id, result: 'ack' };
           } else {
             return { id: request.id, result: '', error: 'Invalid secret' };
           }
         },
-        onRequest(request) {
-          console.log('Request:', request);
+        onRequest(request, event) {
+          console.debug(event.id, 'Request:', request);
         },
-        onResponse(response) {
-          console.log('Response:', response);
+        onResponse(response, event) {
+          console.debug(event.id, 'Response:', response);
         },
-        onError(error) {
-          console.error(error);
+        onError(error, event) {
+          console.warn('Error:', event.id, error);
         },
       });
 
