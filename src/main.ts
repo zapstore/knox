@@ -1,4 +1,5 @@
 import { program } from '@commander-js/extra-typings';
+import { NPool, NRelay1, NSecSigner } from '@nostrify/nostrify';
 import { promptSecret } from '@std/cli';
 import chalk from 'chalk';
 import { generateSecretKey, nip19 } from 'nostr-tools';
@@ -6,7 +7,6 @@ import { generateSecretKey, nip19 } from 'nostr-tools';
 import { BunkerCrypt } from './BunkerCrypt.ts';
 import { BunkerError } from './BunkerError.ts';
 import { KnoxStore } from './KnoxStore.ts';
-import { NPool, NRelay1, NSecSigner } from '@nostrify/nostrify';
 import { NBunker } from './NBunker.ts';
 
 const knox = program
