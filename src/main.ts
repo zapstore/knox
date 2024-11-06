@@ -22,7 +22,10 @@ knox.command('init')
   .description('initialize a new bunker')
   .action(async () => {
     const { file: path } = knox.opts();
-    await assertBunkerExists(path);
+
+    if (await fileExists(path)) {
+      throw new BunkerError('Bunker file already exists');
+    }
 
     using file = await Deno.open(path, { createNew: true, write: true });
     await file.lock(true);
@@ -419,10 +422,14 @@ function promptPassphrase(message: string): BunkerCrypt {
   return new BunkerCrypt(passphrase);
 }
 
+/** Check if a file exists. */
+async function fileExists(path: string): Promise<boolean> {
+  return await Deno.stat(path).then(() => true).catch(() => false);
+}
+
 /** Throw an error if the bunker file doesn't exist. */
 async function assertBunkerExists(path: string): Promise<void> {
-  const exists = await Deno.stat(path).then(() => true).catch(() => false);
-  if (!exists) {
+  if (!await fileExists(path)) {
     throw new BunkerError('Bunker not found. Run "knox init" to create one, or pass "-f" to specify its location.');
   }
 }
