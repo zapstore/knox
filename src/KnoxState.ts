@@ -21,7 +21,7 @@ export interface KnoxAuthorization {
   key_name: string;
   secret: string;
   relays: string[];
-  authorized_pubkeys: string[];
+  pubkeys: string[];
   max_uses?: number;
   bunker_sec: ScrambledBytes;
   created_at: Date;
@@ -32,7 +32,7 @@ const authorizationSchema: z.ZodType<KnoxAuthorization> = z.object({
   key_name: z.string(),
   secret: z.string(),
   relays: z.string().url().array().transform((relays) => [...new Set(relays)]),
-  authorized_pubkeys: n.id().array().transform((pubkeys) => [...new Set(pubkeys)]),
+  pubkeys: n.id().array().transform((pubkeys) => [...new Set(pubkeys)]),
   max_uses: z.number().positive().int().optional(),
   bunker_sec: scrambledBytesSchema,
   created_at: z.coerce.date(),

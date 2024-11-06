@@ -69,7 +69,7 @@ export class KnoxStore {
       key_name: key.name,
       secret,
       relays: opts.relays,
-      authorized_pubkeys: [],
+      pubkeys: [],
       bunker_sec: new ScrambledBytes(bunkerSeckey),
       created_at: new Date(),
       expires_at: opts.expiresAt,
@@ -102,11 +102,11 @@ export class KnoxStore {
           throw new ConnectError('Authorization not found.');
         }
 
-        if (authorization.authorized_pubkeys.includes(pubkey)) {
+        if (authorization.pubkeys.includes(pubkey)) {
           return;
         }
 
-        if (authorization.authorized_pubkeys.length >= (authorization.max_uses ?? Infinity)) {
+        if (authorization.pubkeys.length >= (authorization.max_uses ?? Infinity)) {
           throw new ConnectError('Max uses exceeded.');
         }
 
@@ -114,7 +114,7 @@ export class KnoxStore {
           throw new ConnectError('Authorization expired.');
         }
 
-        authorization.authorized_pubkeys.push(pubkey);
+        authorization.pubkeys.push(pubkey);
       });
     });
   }

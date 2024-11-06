@@ -135,16 +135,16 @@ knox.command('status')
       let unusedSlots = 0;
       let hasUnlimited = false;
 
-      for (const { authorized_pubkeys, max_uses } of authorizations) {
+      for (const { pubkeys, max_uses } of authorizations) {
         if (typeof max_uses !== 'number') {
           hasUnlimited = true;
           break;
         }
-        if (!authorized_pubkeys.length) {
+        if (!pubkeys.length) {
           unusedUris++;
         }
 
-        unusedSlots += Math.max(0, max_uses - authorized_pubkeys.length);
+        unusedSlots += Math.max(0, max_uses - pubkeys.length);
       }
 
       if (hasUnlimited) {
@@ -257,7 +257,7 @@ knox.command('start')
         },
       });
 
-      for (const pubkey of authorization.authorized_pubkeys) {
+      for (const pubkey of authorization.pubkeys) {
         session.authorize(pubkey);
       }
 
