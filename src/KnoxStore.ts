@@ -59,7 +59,7 @@ const stateSchema: z.ZodType<KnoxState> = z.object({
 export class KnoxStore {
   private store: StoreApi<KnoxState>;
 
-  constructor(private path: string, private crypt: BunkerCrypt) {
+  constructor(private file: Deno.FsFile, private crypt: BunkerCrypt) {
     this.store = this.createStore();
   }
 
@@ -74,7 +74,7 @@ export class KnoxStore {
   }
 
   addKey(name: string, sec: Uint8Array): void {
-    for (const key of this.store.getState().keys) {
+    for (const key of this.getState().keys) {
       if (key.name === name) {
         throw new BunkerError(`Key "${name}" already exists.`);
       }
@@ -92,15 +92,15 @@ export class KnoxStore {
   }
 
   listKeys(): KnoxKey[] {
-    return this.store.getState().keys;
+    return this.getState().keys;
   }
 
   getKey(name: string): KnoxKey | undefined {
-    return this.store.getState().keys.find((key) => key.name === name);
+    return this.getState().keys.find((key) => key.name === name);
   }
 
   generateUri(opts: { name: string; relays: string[]; maxUses?: number; expiresAt?: Date }): URL {
-    const key = this.store.getState().keys.find((key) => key.name === opts.name);
+    const key = this.getState().keys.find((key) => key.name === opts.name);
     if (!key) {
       throw new BunkerError(`Key "${opts.name}" not found.`);
     }
@@ -148,40 +148,32 @@ export class KnoxStore {
   }
 
   getAuthorizations(): KnoxAuthorization[] {
-    return this.store.getState().authorizations;
+    return this.getState().authorizations;
   }
 
-  static async createNew(path: string, crypt: BunkerCrypt): Promise<KnoxStore> {
-    const store = new KnoxStore(path, crypt);
-    await store.save({ write: true, createNew: true });
-
-    return store;
+  getState(): KnoxState {
+    return this.store.getState();
   }
 
-  static async open(path: string, crypt: BunkerCrypt): Promise<KnoxStore> {
-    const store = new KnoxStore(path, crypt);
-    await store.load();
+  /** Low-level function to read the bunker file. */
+  static async readBunker(file: Deno.FsFile, crypt: BunkerCrypt): Promise<KnoxState> {
+    const response = new Response(file.readable);
+    const buffer = await response.arrayBuffer();
 
-    return store;
-  }
+    const enc = new Uint8Array(buffer);
+    const dec = crypt.decrypt(enc);
 
-  async load(opts?: Deno.ReadFileOptions): Promise<void> {
-    const enc = await Deno.readFile(this.path, opts);
-    const dec = this.crypt.decrypt(enc);
     const text = new TextDecoder().decode(dec);
-    const state = stateSchema.parse(JSON.parse(text, this.reviver));
+    const data = JSON.parse(text, KnoxStore.reviver);
 
-    this.store.setState(state);
+    return stateSchema.parse(data);
   }
 
-  async save(opts?: Deno.OpenOptions): Promise<void> {
-    using file = await Deno.open(this.path, opts);
-    await file.lock(true);
-
-    const state = this.store.getState();
-    const data = JSON.stringify(state, this.replacer, 2);
+  /** Low-level function to write the bunker file. */
+  static async writeBunker(file: Deno.FsFile, state: KnoxState, crypt: BunkerCrypt): Promise<void> {
+    const data = JSON.stringify(state, KnoxStore.replacer, 2);
     const dec = new TextEncoder().encode(data);
-    const enc = this.crypt.encrypt(dec);
+    const enc = crypt.encrypt(dec);
 
     const writer = file.writable.getWriter();
     await file.truncate();
@@ -189,7 +181,17 @@ export class KnoxStore {
     await writer.close();
   }
 
-  private reviver(_key: string, value: unknown): unknown {
+  async load(): Promise<void> {
+    const state = await KnoxStore.readBunker(this.file, this.crypt);
+    this.store.setState(state);
+  }
+
+  async save(): Promise<void> {
+    const state = this.getState();
+    await KnoxStore.writeBunker(this.file, state, this.crypt);
+  }
+
+  private static reviver(_key: string, value: unknown): unknown {
     if (typeof value === 'string' && value.startsWith('nsec1')) {
       const { data: bytes } = nip19.decode(value as `nsec1${string}`);
       return new ScrambledBytes(bytes);
@@ -198,7 +200,7 @@ export class KnoxStore {
     return value;
   }
 
-  private replacer(_key: string, value: unknown): unknown {
+  private static replacer(_key: string, value: unknown): unknown {
     if (value instanceof ScrambledBytes) {
       using bytes = value.unscramble();
       return nip19.nsecEncode(bytes);
@@ -223,12 +225,5 @@ export class KnoxStore {
       close,
       [Symbol.dispose]: close,
     };
-  }
-
-  close(): void {
-  }
-
-  [Symbol.dispose]() {
-    this.close();
   }
 }

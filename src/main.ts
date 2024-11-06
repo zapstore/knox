@@ -18,14 +18,20 @@ const knox = program
 knox.command('init')
   .description('initialize a new bunker')
   .action(async () => {
-    const { file } = knox.opts();
+    const { file: path } = knox.opts();
 
-    if (await fileExists(file)) {
+    if (await fileExists(path)) {
       throw new BunkerError('Bunker file already exists');
     }
 
+    using file = await Deno.open(path, { createNew: true, write: true });
+    await file.lock(true);
+
     using crypt = promptPassphrase('Enter a new passphrase:');
-    await KnoxStore.createNew(file, crypt);
+    const store = new KnoxStore(file, crypt);
+    const state = store.getState();
+
+    await KnoxStore.writeBunker(file, state, crypt);
   });
 
 knox.command('add')
@@ -53,7 +59,7 @@ knox.command('add')
     }
 
     store.addKey(name, sec);
-    await store.save({ write: true });
+    await store.save();
   });
 
 knox.command('uri')
@@ -96,7 +102,7 @@ knox.command('uri')
       expiresAt: opts.expires ? new Date(opts.expires) : undefined,
     });
 
-    await store.save({ write: true });
+    await store.save();
     console.log(uri.toString());
   });
 
@@ -206,7 +212,7 @@ knox.command('start')
           if (secret === authorization.secret) {
             bunker.authorize(event.pubkey);
             store.authorize(event.pubkey, secret);
-            await store.save({ write: true });
+            await store.save();
             return { id: request.id, result: 'ack' };
           } else {
             return { id: request.id, result: '', error: 'Invalid secret' };
@@ -266,21 +272,23 @@ knox.command('export')
   });
 
 /** Prompt the user to unlock and open the store. Most subcommands (except `init`) call this. */
-async function openBunker(): Promise<{ store: KnoxStore; crypt: BunkerCrypt; [Symbol.dispose]: () => void }> {
-  const { file } = knox.opts();
+async function openBunker(): Promise<{ store: KnoxStore; crypt: BunkerCrypt } & Disposable> {
+  const { file: path } = knox.opts();
 
-  if (!await fileExists(file)) {
+  if (!await fileExists(path)) {
     throw new BunkerError('Bunker not found. Run "knox init" to create one, or pass "-f" to specify its location.');
   }
 
+  const file = await Deno.open(path, { write: true });
   const crypt = promptPassphrase('Enter unlock passphrase:');
-  const store = await KnoxStore.open(file, crypt);
+  const store = new KnoxStore(file, crypt);
+  await store.load();
 
   return {
     store,
     crypt,
     [Symbol.dispose]: () => {
-      store[Symbol.dispose]();
+      file[Symbol.dispose]();
       crypt[Symbol.dispose]();
     },
   };
