@@ -31,8 +31,8 @@ export interface KnoxAuthorization {
 const authorizationSchema: z.ZodType<KnoxAuthorization> = z.object({
   key_name: z.string(),
   secret: z.string(),
-  relays: z.string().url().array(),
-  authorized_pubkeys: n.id().array(),
+  relays: z.string().url().array().transform((relays) => [...new Set(relays)]),
+  authorized_pubkeys: n.id().array().transform((pubkeys) => [...new Set(pubkeys)]),
   max_uses: z.number().positive().int().optional(),
   bunker_sec: scrambledBytesSchema,
   created_at: z.coerce.date(),
@@ -45,8 +45,45 @@ export interface KnoxState {
   version: number;
 }
 
-export const stateSchema: z.ZodType<KnoxState> = z.object({
-  keys: keySchema.array(),
-  authorizations: authorizationSchema.array(),
+export const stateSchema: z.ZodType<KnoxState, z.ZodTypeDef, unknown> = z.object({
+  keys: filteredArray(keySchema),
+  authorizations: filteredArray(authorizationSchema),
   version: z.number().positive(),
+}).transform((state) => {
+  // Remove keys with duplicate names.
+  const keyNames = new Set<string>();
+  state.keys = state.keys.filter((key) => {
+    if (keyNames.has(key.name)) {
+      return false;
+    }
+    keyNames.add(key.name);
+    return true;
+  });
+
+  // Remove invalid authorizations.
+  state.authorizations = state.authorizations.filter((auth) => {
+    // Remove expired authorizations.
+    if (auth.expires_at && auth.expires_at < new Date()) {
+      return false;
+    }
+    // Remove authorizations with missing keys.
+    const key = state.keys.find((key) => key.name === auth.key_name);
+    if (!key) {
+      return false;
+    }
+    return true;
+  });
+
+  return state;
 });
+
+/** Validates individual items in an array, dropping any that aren't valid. */
+function filteredArray<T extends z.ZodTypeAny>(schema: T) {
+  return z.any().array().catch([])
+    .transform((arr) => (
+      arr.map((item) => {
+        const parsed = schema.safeParse(item);
+        return parsed.success ? parsed.data : undefined;
+      }).filter((item): item is z.infer<T> => Boolean(item))
+    ));
+}
