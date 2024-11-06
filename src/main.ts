@@ -113,7 +113,7 @@ knox.command('status')
 
     function printKey(name: string, tags: string[]) {
       if (tags.length) {
-        console.log(chalk.bold(name), chalk.gray('(') + tags.join(chalk.gray(', ')) + chalk.gray(')'));
+        console.log(chalk.bold(name), chalk.dim('(') + tags.join(chalk.dim(', ')) + chalk.dim(')'));
       } else {
         console.log(chalk.bold(name));
       }
@@ -124,7 +124,7 @@ knox.command('status')
       const authorizations = store.authorizations.filter((auth) => auth.key_name === key.name);
 
       if (!authorizations.length) {
-        printKey(key.name, [chalk.gray('new')]);
+        printKey(key.name, [chalk.dim('new')]);
         continue;
       }
 
@@ -187,10 +187,7 @@ knox.command('start')
 
     /** One pool for all authorizations. */
     const pool = new NPool({
-      open: (url) => {
-        console.debug('Opened', url);
-        return new NRelay1(url);
-      },
+      open: (url) => new NRelay1(url),
       eventRouter: (_event) => Promise.resolve([]),
       reqRouter: (_filters) => Promise.resolve(new Map()),
     });
@@ -217,14 +214,8 @@ knox.command('start')
       // Create a new sub-pool for this authorization.
       const relay = new NPool({
         open: (url) => pool.relay(url), // Relays taken from main pool.
-        eventRouter: (event) => {
-          console.debug('EVENT:', event.id, authorization.relays.join(', '));
-          return Promise.resolve(authorization.relays);
-        },
-        reqRouter: (filters) => {
-          console.debug('REQ:', authorization.relays.join(', '));
-          return Promise.resolve(new Map(authorization.relays.map((relay) => [relay, filters])));
-        },
+        eventRouter: () => Promise.resolve(authorization.relays),
+        reqRouter: (filters) => Promise.resolve(new Map(authorization.relays.map((relay) => [relay, filters]))),
       });
 
       const session = new NBunker({
@@ -267,7 +258,13 @@ knox.command('start')
         session.authorize(pubkey);
       }
 
-      console.log(`Bunker started for "${authorization.key_name}"`);
+      console.log(
+        chalk.green('up'),
+        chalk.bold(authorization.key_name),
+        chalk.dim(authorization.secret),
+        chalk.dim(authorization.relays.join(', ')),
+      );
+
       bunkers.set(authorization.secret, session);
     }
 
@@ -288,7 +285,11 @@ knox.command('start')
         const added = nextIds.difference(prevIds);
         const removed = prevIds.difference(nextIds);
 
-        console.log(`Bunker changed: ${added.size} added, ${removed.size} removed`);
+        console.log(
+          chalk.blue('changed'),
+          added.size ? chalk.green(`${added.size} added`) : '',
+          removed.size ? chalk.red(`${removed.size} removed`) : '',
+        );
 
         for (const id of added) {
           const authorization = state.authorizations.find((auth) => auth.secret === id);
@@ -310,6 +311,17 @@ knox.command('start')
           if (session) {
             session.close();
             bunkers.delete(id);
+          }
+          const authorization = state.authorizations.find((auth) => auth.secret === id);
+          if (authorization) {
+            console.log(
+              chalk.green('down'),
+              chalk.bold(authorization.key_name),
+              chalk.dim(authorization.secret),
+              chalk.dim(authorization.relays.join(', ')),
+            );
+          } else {
+            console.log(chalk.red('down'), chalk.dim(id));
           }
         }
       }
