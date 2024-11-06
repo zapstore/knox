@@ -90,7 +90,7 @@ knox.command('uri')
     using bunker = await openBunker();
     const { save, store } = bunker;
 
-    const key = store.listKeys().find((key) => key.name === name);
+    const key = store.keys.find((key) => key.name === name);
     if (!key) {
       throw new BunkerError(`Key "${name}" not found`);
     }
@@ -120,9 +120,9 @@ knox.command('status')
       }
     }
 
-    for (const key of store.listKeys()) {
+    for (const key of store.keys) {
       const tags: string[] = [];
-      const authorizations = store.getAuthorizations().filter((auth) => auth.key_name === key.name);
+      const authorizations = store.authorizations.filter((auth) => auth.key_name === key.name);
 
       if (!authorizations.length) {
         printKey(key.name, [chalk.gray('new')]);
@@ -184,7 +184,7 @@ knox.command('start')
     });
 
     // Loop through all authorizations and create a bunker instance for each.
-    for (const authorization of store.getAuthorizations()) {
+    for (const authorization of store.authorizations) {
       const key = store.getKey(authorization.key_name);
       if (!key) {
         console.error(`Key "${authorization.key_name}" not found`);
@@ -248,7 +248,7 @@ knox.command('export')
     using bunker = await openBunker();
     const { store, crypt } = bunker;
 
-    for (const key of store.listKeys()) {
+    for (const key of store.keys) {
       using bytes = key.sec.unscramble();
 
       const name = key.name;

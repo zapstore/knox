@@ -37,8 +37,16 @@ export class KnoxStore {
     });
   }
 
-  listKeys(): KnoxKey[] {
+  get keys(): KnoxKey[] {
     return this.getState().keys;
+  }
+
+  get authorizations(): KnoxAuthorization[] {
+    return this.getState().authorizations;
+  }
+
+  get version(): number {
+    return this.getState().version;
   }
 
   getKey(name: string): KnoxKey | undefined {
@@ -91,10 +99,6 @@ export class KnoxStore {
         authorization?.authorized_pubkeys.push(pubkey);
       });
     });
-  }
-
-  getAuthorizations(): KnoxAuthorization[] {
-    return this.getState().authorizations;
   }
 
   setState(state: ((state: KnoxState) => KnoxState) | KnoxState): void {
