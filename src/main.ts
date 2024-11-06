@@ -39,7 +39,7 @@ knox.command('add')
   .argument('<name>', 'name of the key')
   .action(async (name) => {
     using bunker = await openBunker();
-    const { save, store } = bunker;
+    const { store, save } = bunker;
 
     const key = promptSecret('Enter secret key (leave blank to generate):', { clear: true });
 
@@ -88,7 +88,7 @@ knox.command('uri')
     });
 
     using bunker = await openBunker();
-    const { save, store } = bunker;
+    const { store, save } = bunker;
 
     const key = store.keys.find((key) => key.name === name);
     if (!key) {
@@ -171,7 +171,7 @@ knox.command('start')
   .description('start the bunker daemon')
   .action(async () => {
     using bunker = await openBunker();
-    const { save, store } = bunker;
+    const { store, save } = bunker;
 
     if (!store.authorizations.length) {
       console.error('No authorizations found. Run "knox uri" to generate one.');
