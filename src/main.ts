@@ -10,6 +10,7 @@ import { KnoxFS } from './KnoxFS.ts';
 import { KnoxStore } from './KnoxStore.ts';
 import { NBunker } from './NBunker.ts';
 import { ConnectError } from './ConnectError.ts';
+import { KnoxAuthorization, KnoxKey } from './KnoxState.ts';
 
 const knox = program
   .name('knox')
@@ -21,10 +22,7 @@ knox.command('init')
   .description('initialize a new bunker')
   .action(async () => {
     const { file: path } = knox.opts();
-
-    if (await fileExists(path)) {
-      throw new BunkerError('Bunker file already exists');
-    }
+    await assertBunkerExists(path);
 
     using file = await Deno.open(path, { createNew: true, write: true });
     await file.lock(true);
@@ -32,7 +30,7 @@ knox.command('init')
     using crypt = promptPassphrase('Enter a new passphrase:');
     const state = new KnoxStore().getState();
 
-    await KnoxFS.write(file, state, crypt);
+    await KnoxFS.write(path, state, crypt);
   });
 
 knox.command('add')
@@ -172,18 +170,11 @@ knox.command('start')
   .description('start the bunker daemon')
   .action(async () => {
     const { file: path } = knox.opts();
-
-    if (!await fileExists(path)) {
-      throw new BunkerError('Bunker not found. Run "knox init" to create one, or pass "-f" to specify its location.');
-    }
-
-    const file = await Deno.open(path, { read: true });
+    await assertBunkerExists(path);
 
     const crypt = promptPassphrase('Enter unlock passphrase:');
-    const state = await KnoxFS.read(file, crypt);
+    const state = await KnoxFS.read(path, crypt);
     const store = new KnoxStore(state);
-
-    file.close();
 
     if (!store.authorizations.length) {
       console.error('No authorizations found. Run "knox uri" to generate one.');
@@ -192,13 +183,20 @@ knox.command('start')
 
     console.log('Starting bunker daemon...');
     console.log('Press Ctrl+C to stop.');
+    console.log('');
 
     /** One pool for all authorizations. */
     const pool = new NPool({
-      open: (url) => new NRelay1(url),
+      open: (url) => {
+        console.debug('Opened', url);
+        return new NRelay1(url);
+      },
       eventRouter: (_event) => Promise.resolve([]),
       reqRouter: (_filters) => Promise.resolve(new Map()),
     });
+
+    /** Map of all bunkers, keyed by authorization secret. */
+    const bunkers = new Map<string, NBunker>();
 
     // Loop through all authorizations and create a bunker instance for each.
     for (const authorization of store.authorizations) {
@@ -208,6 +206,10 @@ knox.command('start')
         continue;
       }
 
+      startBunkerSession(authorization, key);
+    }
+
+    function startBunkerSession(authorization: KnoxAuthorization, key: KnoxKey): void {
       // FIXME: Keys should be scrambled or encrypted in memory.
       const userSigner = new NSecSigner(key.sec.unscramble());
       const bunkerSigner = new NSecSigner(authorization.bunker_sec.unscramble());
@@ -215,8 +217,14 @@ knox.command('start')
       // Create a new sub-pool for this authorization.
       const relay = new NPool({
         open: (url) => pool.relay(url), // Relays taken from main pool.
-        eventRouter: () => Promise.resolve(authorization.relays),
-        reqRouter: (filters) => Promise.resolve(new Map(authorization.relays.map((relay) => [relay, filters]))),
+        eventRouter: (event) => {
+          console.debug('EVENT:', event.id, authorization.relays.join(', '));
+          return Promise.resolve(authorization.relays);
+        },
+        reqRouter: (filters) => {
+          console.debug('REQ:', authorization.relays.join(', '));
+          return Promise.resolve(new Map(authorization.relays.map((relay) => [relay, filters])));
+        },
       });
 
       const session = new NBunker({
@@ -257,6 +265,53 @@ knox.command('start')
 
       for (const pubkey of authorization.authorized_pubkeys) {
         session.authorize(pubkey);
+      }
+
+      console.log(`Bunker started for "${authorization.key_name}"`);
+      bunkers.set(authorization.secret, session);
+    }
+
+    for await (const fsEvent of Deno.watchFs(path)) {
+      if (['remove', 'rename'].includes(fsEvent.kind)) {
+        console.error('Bunker file removed or renamed. Exiting...');
+        Deno.exit(1);
+      }
+      if (fsEvent.kind === 'modify') {
+        using file = await Deno.open(path, { read: true });
+        await file.lock(true);
+
+        const state = await KnoxFS.read(path, crypt);
+
+        const prevIds = new Set(bunkers.keys());
+        const nextIds = new Set(state.authorizations.map((auth) => auth.secret));
+
+        const added = nextIds.difference(prevIds);
+        const removed = prevIds.difference(nextIds);
+
+        console.log(`Bunker changed: ${added.size} added, ${removed.size} removed`);
+
+        for (const id of added) {
+          const authorization = state.authorizations.find((auth) => auth.secret === id);
+          if (!authorization) {
+            continue;
+          }
+
+          const key = state.keys.find((key) => key.name === authorization.key_name);
+          if (!key) {
+            console.error(`Key "${authorization.key_name}" not found`);
+            continue;
+          }
+
+          startBunkerSession(authorization, key);
+        }
+
+        for (const id of removed) {
+          const session = bunkers.get(id);
+          if (session) {
+            session.close();
+            bunkers.delete(id);
+          }
+        }
       }
     }
   });
@@ -300,24 +355,20 @@ knox.command('export')
 /** Prompt the user to unlock and open the store. Most subcommands (except `init`) call this. */
 async function openBunker(): Promise<{ save: () => Promise<void>; store: KnoxStore; crypt: BunkerCrypt } & Disposable> {
   const { file: path } = knox.opts();
-
-  if (!await fileExists(path)) {
-    throw new BunkerError('Bunker not found. Run "knox init" to create one, or pass "-f" to specify its location.');
-  }
+  await assertBunkerExists(path);
 
   const file = await Deno.open(path, { write: true });
   await file.lock(true);
 
-  using read = await Deno.open(path, { read: true });
   const crypt = promptPassphrase('Enter unlock passphrase:');
-  const state = await KnoxFS.read(read, crypt);
+  const state = await KnoxFS.read(path, crypt);
   const store = new KnoxStore(state);
 
   return {
     store,
     crypt,
     async save() {
-      await KnoxFS.write(file, store.getState(), crypt);
+      await KnoxFS.write(path, store.getState(), crypt);
     },
     [Symbol.dispose]: () => {
       file[Symbol.dispose]();
@@ -333,14 +384,13 @@ async function transaction(crypt: BunkerCrypt): Promise<{ store: KnoxStore } & A
   const file = await Deno.open(path, { write: true });
   await file.lock(true);
 
-  using read = await Deno.open(path, { read: true });
-  const state = await KnoxFS.read(read, crypt);
+  const state = await KnoxFS.read(path, crypt);
   const store = new KnoxStore(state);
 
   return {
     store,
     [Symbol.asyncDispose]: async () => {
-      await KnoxFS.write(file, store.getState(), crypt);
+      await KnoxFS.write(path, store.getState(), crypt);
       file[Symbol.dispose]();
       crypt[Symbol.dispose]();
     },
@@ -357,9 +407,12 @@ function promptPassphrase(message: string): BunkerCrypt {
   return new BunkerCrypt(passphrase);
 }
 
-/** Check if a file exists. */
-async function fileExists(path: string): Promise<boolean> {
-  return await Deno.stat(path).then(() => true).catch(() => false);
+/** Throw an error if the bunker file doesn't exist. */
+async function assertBunkerExists(path: string): Promise<void> {
+  const exists = await Deno.stat(path).then(() => true).catch(() => false);
+  if (!exists) {
+    throw new BunkerError('Bunker not found. Run "knox init" to create one, or pass "-f" to specify its location.');
+  }
 }
 
 // Process the command line arguments and run the program.

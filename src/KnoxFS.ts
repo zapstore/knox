@@ -6,8 +6,8 @@ import { ScrambledBytes } from './ScrambledBytes.ts';
 
 export class KnoxFS {
   /** Low-level function to read the bunker file. */
-  static async read(file: Deno.FsFile, crypt: BunkerCrypt): Promise<KnoxState> {
-    const enc = await new Response(file.readable).bytes();
+  static async read(path: string, crypt: BunkerCrypt): Promise<KnoxState> {
+    const enc = await Deno.readFile(path);
     const dec = crypt.decrypt(enc);
 
     const text = new TextDecoder().decode(dec);
@@ -17,15 +17,12 @@ export class KnoxFS {
   }
 
   /** Low-level function to write the bunker file. */
-  static async write(file: Deno.FsFile, state: KnoxState, crypt: BunkerCrypt): Promise<void> {
+  static async write(path: string, state: KnoxState, crypt: BunkerCrypt): Promise<void> {
     const data = JSON.stringify(state, KnoxFS.replacer, 2);
     const dec = new TextEncoder().encode(data);
     const enc = crypt.encrypt(dec);
 
-    const writer = file.writable.getWriter();
-    await file.truncate();
-    await writer.write(enc);
-    await writer.close();
+    await Deno.writeFile(path, enc);
   }
 
   private static reviver(_key: string, value: unknown): unknown {
