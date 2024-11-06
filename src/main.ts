@@ -238,6 +238,10 @@ knox.command('start')
         bunker.authorize(pubkey);
       }
     }
+
+    // Wait until killed.
+    // HACK: Watch the file instead and the program wont close automatically.
+    await new Promise(() => {});
   });
 
 knox.command('export')
