@@ -229,10 +229,13 @@ knox.command('start')
           const [, secret] = request.params;
 
           if (secret === authorization.secret) {
-            await using trx = await transaction(crypt);
             try {
-              trx.store.authorize(event.pubkey, secret);
-              session.authorize(event.pubkey);
+              await KnoxFS.update(path, crypt, (state) => {
+                const store = new KnoxStore(state);
+                store.authorize(event.pubkey, secret);
+                session.authorize(event.pubkey);
+                return store.getState();
+              });
             } catch (error) {
               if (error instanceof ConnectError) {
                 return { id: request.id, result: '', error: error.message };
@@ -386,26 +389,6 @@ async function openBunker(): Promise<{ save: () => Promise<void>; store: KnoxSto
       await KnoxFS.write(path, store.getState(), crypt);
     },
     [Symbol.dispose]: () => {
-      file[Symbol.dispose]();
-      crypt[Symbol.dispose]();
-    },
-  };
-}
-
-/** Lock the bunker file, read it, let the caller manipulate the state and then save it automatically. */
-async function transaction(crypt: BunkerCrypt): Promise<{ store: KnoxStore } & AsyncDisposable> {
-  const { file: path } = knox.opts();
-
-  const file = await Deno.open(path, { write: true });
-  await file.lock(true);
-
-  const state = await KnoxFS.read(path, crypt);
-  const store = new KnoxStore(state);
-
-  return {
-    store,
-    [Symbol.asyncDispose]: async () => {
-      await KnoxFS.write(path, store.getState(), crypt);
       file[Symbol.dispose]();
       crypt[Symbol.dispose]();
     },
