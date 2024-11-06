@@ -363,15 +363,7 @@ async function openBunker() {
 
   const crypt = promptPassphrase('Enter unlock passphrase:');
   const state = await KnoxFS.read(path, crypt);
-
-  const store = new KnoxStore(async <T>(updateFn: (state: KnoxState) => T): Promise<T> => {
-    let result: T;
-    await KnoxFS.update(path, crypt, (state) => {
-      result = updateFn(state);
-      return state;
-    });
-    return result!;
-  });
+  const store = new KnoxStore((updateFn) => KnoxFS.update(path, crypt, updateFn));
 
   return {
     path,

@@ -6,7 +6,7 @@ import { KnoxAuthorization, type KnoxState } from './KnoxState.ts';
 import { ScrambledBytes } from './ScrambledBytes.ts';
 
 export class KnoxStore {
-  constructor(private update: <T>(updateFn: (state: KnoxState) => T) => Promise<T>) {}
+  constructor(private update: (updateFn: (state: KnoxState) => KnoxState) => Promise<void>) {}
 
   async addKey(name: string, sec: Uint8Array): Promise<void> {
     await this.update((state) => {
@@ -21,11 +21,15 @@ export class KnoxStore {
         sec: new ScrambledBytes(sec),
         created_at: new Date(),
       });
+
+      return state;
     });
   }
 
   async generateUri(opts: { key: string; relays: string[]; maxUses?: number; expiresAt?: Date }): Promise<URL> {
-    return await this.update((state) => {
+    let uri: URL;
+
+    await this.update((state) => {
       const key = state.keys.find((key) => key.name === opts.key);
       if (!key) {
         throw new BunkerError(`Key "${opts.key}" not found.`);
@@ -47,7 +51,7 @@ export class KnoxStore {
         max_uses: opts.maxUses,
       };
 
-      const uri = new URL(`bunker://${bunkerPubkey}`);
+      uri = new URL(`bunker://${bunkerPubkey}`);
 
       for (const relay of opts.relays) {
         uri.searchParams.append('relay', relay);
@@ -57,8 +61,10 @@ export class KnoxStore {
 
       state.authorizations.push(authorization);
 
-      return uri;
+      return state;
     });
+
+    return uri!;
   }
 
   async authorize(pubkey: string, secret: string): Promise<void> {
@@ -70,7 +76,7 @@ export class KnoxStore {
       }
 
       if (authorization.pubkeys.includes(pubkey)) {
-        return;
+        return state;
       }
 
       if (authorization.pubkeys.length >= (authorization.max_uses ?? Infinity)) {
@@ -82,6 +88,8 @@ export class KnoxStore {
       }
 
       authorization.pubkeys.push(pubkey);
+
+      return state;
     });
   }
 }
