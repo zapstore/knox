@@ -14,7 +14,7 @@ import { KnoxAuthorization, KnoxKey } from './KnoxState.ts';
 
 const knox = program
   .name('knox')
-  .description('Nostr bunker with JSON storage.')
+  .description('Nostr bunker with encrypted storage.')
   .version('0.0.1')
   .option('-f, --file <file>', 'path to the bunker file', 'knox.bunker');
 
