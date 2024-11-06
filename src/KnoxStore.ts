@@ -5,6 +5,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import { BunkerError } from './BunkerError.ts';
 import { KnoxAuthorization, KnoxKey, type KnoxState } from './KnoxState.ts';
 import { ScrambledBytes } from './ScrambledBytes.ts';
+import { ConnectError } from './ConnectError.ts';
 
 export class KnoxStore {
   private store: StoreApi<KnoxState>;
@@ -96,7 +97,24 @@ export class KnoxStore {
     this.setState((state) => {
       return produce(state, (draft) => {
         const authorization = draft.authorizations.find((auth) => auth.secret === secret);
-        authorization?.authorized_pubkeys.push(pubkey);
+
+        if (!authorization) {
+          throw new ConnectError('Authorization not found.');
+        }
+
+        if (authorization.authorized_pubkeys.includes(pubkey)) {
+          return;
+        }
+
+        if (authorization.authorized_pubkeys.length >= (authorization.max_uses ?? Infinity)) {
+          throw new ConnectError('Max uses exceeded.');
+        }
+
+        if (authorization.expires_at && Date.now() > authorization.expires_at.getTime()) {
+          throw new ConnectError('Authorization expired.');
+        }
+
+        authorization.authorized_pubkeys.push(pubkey);
       });
     });
   }

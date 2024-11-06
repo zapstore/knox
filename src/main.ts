@@ -9,6 +9,7 @@ import { BunkerError } from './BunkerError.ts';
 import { KnoxFS } from './KnoxFS.ts';
 import { KnoxStore } from './KnoxStore.ts';
 import { NBunker } from './NBunker.ts';
+import { ConnectError } from './ConnectError.ts';
 
 const knox = program
   .name('knox')
@@ -170,8 +171,19 @@ knox.command('status')
 knox.command('start')
   .description('start the bunker daemon')
   .action(async () => {
-    const bunker = await openBunker();
-    const { store, save } = bunker;
+    const { file: path } = knox.opts();
+
+    if (!await fileExists(path)) {
+      throw new BunkerError('Bunker not found. Run "knox init" to create one, or pass "-f" to specify its location.');
+    }
+
+    const file = await Deno.open(path, { read: true });
+
+    const crypt = promptPassphrase('Enter unlock passphrase:');
+    const state = await KnoxFS.read(file, crypt);
+    const store = new KnoxStore(state);
+
+    file.close();
 
     if (!store.authorizations.length) {
       console.error('No authorizations found. Run "knox uri" to generate one.');
@@ -207,7 +219,7 @@ knox.command('start')
         reqRouter: (filters) => Promise.resolve(new Map(authorization.relays.map((relay) => [relay, filters]))),
       });
 
-      const bunker = new NBunker({
+      const session = new NBunker({
         relay,
         bunkerSigner,
         userSigner,
@@ -215,9 +227,18 @@ knox.command('start')
           const [, secret] = request.params;
 
           if (secret === authorization.secret) {
-            bunker.authorize(event.pubkey);
-            store.authorize(event.pubkey, secret);
-            await save();
+            await using trx = await transaction(crypt);
+            try {
+              trx.store.authorize(event.pubkey, secret);
+              session.authorize(event.pubkey);
+            } catch (error) {
+              if (error instanceof ConnectError) {
+                return { id: request.id, result: '', error: error.message };
+              } else {
+                console.error(error);
+                return { id: request.id, result: '', error: 'Internal error' };
+              }
+            }
             return { id: request.id, result: 'ack' };
           } else {
             return { id: request.id, result: '', error: 'Invalid secret' };
@@ -235,7 +256,7 @@ knox.command('start')
       });
 
       for (const pubkey of authorization.authorized_pubkeys) {
-        bunker.authorize(pubkey);
+        session.authorize(pubkey);
       }
     }
   });
@@ -299,6 +320,27 @@ async function openBunker(): Promise<{ save: () => Promise<void>; store: KnoxSto
       await KnoxFS.write(file, store.getState(), crypt);
     },
     [Symbol.dispose]: () => {
+      file[Symbol.dispose]();
+      crypt[Symbol.dispose]();
+    },
+  };
+}
+
+/** Lock the bunker file, read it, let the caller manipulate the state and then save it automatically. */
+async function transaction(crypt: BunkerCrypt): Promise<{ store: KnoxStore } & AsyncDisposable> {
+  const { file: path } = knox.opts();
+
+  const file = await Deno.open(path, { write: true });
+  await file.lock(true);
+
+  using read = await Deno.open(path, { read: true });
+  const state = await KnoxFS.read(read, crypt);
+  const store = new KnoxStore(state);
+
+  return {
+    store,
+    [Symbol.asyncDispose]: async () => {
+      await KnoxFS.write(file, store.getState(), crypt);
       file[Symbol.dispose]();
       crypt[Symbol.dispose]();
     },
