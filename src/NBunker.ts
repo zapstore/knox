@@ -47,6 +47,7 @@ export interface NBunkerOpts {
    * eg when decrypting the event content or parsing the request object.
    */
   onError?(error: unknown, event: NostrEvent): void;
+  signal?: AbortSignal;
 }
 
 /**
@@ -58,12 +59,14 @@ export interface NBunkerOpts {
 export class NBunker {
   private controller = new AbortController();
   private authorizedPubkeys = new Set<string>();
+  private signal: AbortSignal;
 
   /** Wait for the bunker to be ready before sending requests. */
   public waitReady: Promise<void>;
   private setReady!: () => void;
 
   constructor(private opts: NBunkerOpts) {
+    this.signal = opts.signal ? AbortSignal.any([opts.signal, this.controller.signal]) : this.controller.signal;
     this.waitReady = new Promise((resolve) => {
       this.setReady = resolve;
     });
@@ -73,8 +76,8 @@ export class NBunker {
   /** Open the signer subscription to the relay. */
   private async open() {
     const { relay, bunkerSigner, onError } = this.opts;
+    const { signal } = this;
 
-    const signal = this.controller.signal;
     const bunkerPubkey = await bunkerSigner.getPublicKey();
 
     const filters: NostrFilter[] = [
