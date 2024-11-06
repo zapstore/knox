@@ -170,12 +170,14 @@ knox.command('start')
     console.log('Starting bunker daemon...');
     console.log('Press Ctrl+C to stop.');
 
+    /** One pool for all authorizations. */
     const pool = new NPool({
       open: (url) => new NRelay1(url),
       eventRouter: (_event) => Promise.resolve([]),
       reqRouter: (_filters) => Promise.resolve(new Map()),
     });
 
+    // Loop through all authorizations and create a bunker instance for each.
     for (const authorization of store.getAuthorizations()) {
       const key = store.getKey(authorization.key_name);
       if (!key) {
@@ -187,8 +189,9 @@ knox.command('start')
       const userSigner = new NSecSigner(key.sec.unscramble());
       const bunkerSigner = new NSecSigner(authorization.bunker_sec.unscramble());
 
+      // Create a new sub-pool for this authorization.
       const relay = new NPool({
-        open: (url) => pool.relay(url),
+        open: (url) => pool.relay(url), // Relays taken from main pool.
         eventRouter: () => Promise.resolve(authorization.relays),
         reqRouter: (filters) => Promise.resolve(new Map(authorization.relays.map((relay) => [relay, filters]))),
       });
