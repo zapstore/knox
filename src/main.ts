@@ -10,7 +10,7 @@ import { KnoxFS } from './KnoxFS.ts';
 import { KnoxStore } from './KnoxStore.ts';
 import { NBunker } from './NBunker.ts';
 import { ConnectError } from './ConnectError.ts';
-import { KnoxAuthorization, KnoxKey } from './KnoxState.ts';
+import { KnoxAuthorization, KnoxKey, KnoxState } from './KnoxState.ts';
 
 const knox = program
   .name('knox')
@@ -31,7 +31,12 @@ knox.command('init')
     await file.lock(true);
 
     using crypt = promptPassphrase('Enter a new passphrase:');
-    const state = new KnoxStore().getState();
+
+    const state: KnoxState = {
+      keys: [],
+      authorizations: [],
+      version: 1,
+    };
 
     await KnoxFS.write(path, state, crypt);
   });
@@ -41,8 +46,6 @@ knox.command('add')
   .argument('<name>', 'name of the key')
   .action(async (name) => {
     using bunker = await openBunker();
-    const { store, save } = bunker;
-
     const key = promptSecret('Enter secret key (leave blank to generate):', { clear: true });
 
     let sec: Uint8Array | undefined;
@@ -60,8 +63,7 @@ knox.command('add')
       }
     }
 
-    store.addKey(name, sec);
-    await save();
+    await bunker.store.addKey(name, sec);
   });
 
 knox.command('uri')
@@ -70,7 +72,7 @@ knox.command('uri')
   .argument('<relay...>', 'relays to use')
   .option('-n, --uses <count>', 'maximum number of uses', '1')
   .option('--expires <date>', 'expiration date')
-  .action(async (name, relays, opts) => {
+  .action(async (key, relays, opts) => {
     if (opts.expires && !Date.parse(opts.expires)) {
       throw new BunkerError('Invalid expiration date');
     }
@@ -90,21 +92,14 @@ knox.command('uri')
     });
 
     using bunker = await openBunker();
-    const { store, save } = bunker;
 
-    const key = store.keys.find((key) => key.name === name);
-    if (!key) {
-      throw new BunkerError(`Key "${name}" not found`);
-    }
-
-    const uri = store.generateUri({
-      name,
+    const uri = await bunker.store.generateUri({
+      key,
       relays,
       maxUses: opts.uses ? Number(opts.uses) : undefined,
       expiresAt: opts.expires ? new Date(opts.expires) : undefined,
     });
 
-    await save();
     console.log(uri.toString());
   });
 
@@ -112,7 +107,7 @@ knox.command('status')
   .description('show the status of the bunker')
   .action(async () => {
     using bunker = await openBunker();
-    const { store } = bunker;
+    const { state } = bunker;
 
     function printKey(name: string, tags: string[]) {
       if (tags.length) {
@@ -122,9 +117,9 @@ knox.command('status')
       }
     }
 
-    for (const key of store.keys) {
+    for (const key of state.keys) {
       const tags: string[] = [];
-      const authorizations = store.authorizations.filter((auth) => auth.key === key.name);
+      const authorizations = state.authorizations.filter((auth) => auth.key === key.name);
 
       if (!authorizations.length) {
         printKey(key.name, [chalk.dim('new')]);
@@ -172,14 +167,9 @@ knox.command('status')
 knox.command('start')
   .description('start the bunker daemon')
   .action(async () => {
-    const { file: path } = knox.opts();
-    await assertBunkerExists(path);
+    const { path, crypt, state, store } = await openBunker();
 
-    const crypt = promptPassphrase('Enter unlock passphrase:');
-    const state = await KnoxFS.read(path, crypt);
-    const store = new KnoxStore(state);
-
-    if (!store.authorizations.length) {
+    if (!state.authorizations.length) {
       console.error('No authorizations found. Run "knox uri" to generate one.');
       return;
     }
@@ -199,8 +189,8 @@ knox.command('start')
     const bunkers = new Map<string, NBunker>();
 
     // Loop through all authorizations and create a bunker instance for each.
-    for (const authorization of store.authorizations) {
-      const key = store.getKey(authorization.key);
+    for (const authorization of state.authorizations) {
+      const key = state.keys.find((key) => key.name === authorization.key);
       if (!key) {
         console.error(`Key "${authorization.key}" not found`);
         continue;
@@ -230,12 +220,8 @@ knox.command('start')
 
           if (secret === authorization.secret) {
             try {
-              await KnoxFS.update(path, crypt, (state) => {
-                const store = new KnoxStore(state);
-                store.authorize(event.pubkey, secret);
-                session.authorize(event.pubkey);
-                return store.getState();
-              });
+              await store.authorize(event.pubkey, secret);
+              session.authorize(event.pubkey);
             } catch (error) {
               if (error instanceof ConnectError) {
                 return { id: request.id, result: '', error: error.message };
@@ -345,9 +331,9 @@ knox.command('export')
     }
 
     using bunker = await openBunker();
-    const { store, crypt } = bunker;
+    const { state, crypt } = bunker;
 
-    for (const key of store.keys) {
+    for (const key of state.keys) {
       using bytes = key.sec.unscramble();
 
       const name = key.name;
@@ -371,25 +357,28 @@ knox.command('export')
   });
 
 /** Prompt the user to unlock and open the store. Most subcommands (except `init`) call this. */
-async function openBunker(): Promise<{ save: () => Promise<void>; store: KnoxStore; crypt: BunkerCrypt } & Disposable> {
+async function openBunker() {
   const { file: path } = knox.opts();
   await assertBunkerExists(path);
 
-  const file = await Deno.open(path, { write: true });
-  await file.lock(true);
-
   const crypt = promptPassphrase('Enter unlock passphrase:');
   const state = await KnoxFS.read(path, crypt);
-  const store = new KnoxStore(state);
+
+  const store = new KnoxStore(async <T>(updateFn: (state: KnoxState) => T): Promise<T> => {
+    let result: T;
+    await KnoxFS.update(path, crypt, (state) => {
+      result = updateFn(state);
+      return state;
+    });
+    return result!;
+  });
 
   return {
+    path,
+    state,
     store,
     crypt,
-    async save() {
-      await KnoxFS.write(path, store.getState(), crypt);
-    },
     [Symbol.dispose]: () => {
-      file[Symbol.dispose]();
       crypt[Symbol.dispose]();
     },
   };

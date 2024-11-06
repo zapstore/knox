@@ -1,129 +1,87 @@
-import { produce } from 'immer';
 import { generateSecretKey, getPublicKey } from 'nostr-tools';
-import { createStore, type StoreApi } from 'zustand/vanilla';
 
 import { BunkerError } from './BunkerError.ts';
-import { KnoxAuthorization, KnoxKey, type KnoxState } from './KnoxState.ts';
-import { ScrambledBytes } from './ScrambledBytes.ts';
 import { ConnectError } from './ConnectError.ts';
+import { KnoxAuthorization, type KnoxState } from './KnoxState.ts';
+import { ScrambledBytes } from './ScrambledBytes.ts';
 
 export class KnoxStore {
-  private store: StoreApi<KnoxState>;
+  constructor(private update: <T>(updateFn: (state: KnoxState) => T) => Promise<T>) {}
 
-  constructor(initialState?: KnoxState) {
-    this.store = createStore<KnoxState>()(
-      () => (initialState ?? {
-        keys: [],
-        authorizations: [],
-        version: 1,
-      }),
-    );
-  }
-
-  addKey(name: string, sec: Uint8Array): void {
-    for (const key of this.getState().keys) {
-      if (key.name === name) {
-        throw new BunkerError(`Key "${name}" already exists.`);
+  async addKey(name: string, sec: Uint8Array): Promise<void> {
+    await this.update((state) => {
+      for (const key of state.keys) {
+        if (key.name === name) {
+          throw new BunkerError(`Key "${name}" already exists.`);
+        }
       }
-    }
 
-    this.setState((state) => {
-      return produce(state, (draft) => {
-        draft.keys.push({
-          name,
-          sec: new ScrambledBytes(sec),
-          created_at: new Date(),
-        });
+      state.keys.push({
+        name,
+        sec: new ScrambledBytes(sec),
+        created_at: new Date(),
       });
     });
   }
 
-  get keys(): KnoxKey[] {
-    return this.getState().keys;
-  }
+  async generateUri(opts: { key: string; relays: string[]; maxUses?: number; expiresAt?: Date }): Promise<URL> {
+    return await this.update((state) => {
+      const key = state.keys.find((key) => key.name === opts.key);
+      if (!key) {
+        throw new BunkerError(`Key "${opts.key}" not found.`);
+      }
 
-  get authorizations(): KnoxAuthorization[] {
-    return this.getState().authorizations;
-  }
+      const secret = crypto.randomUUID();
 
-  get version(): number {
-    return this.getState().version;
-  }
+      const bunkerSeckey = generateSecretKey();
+      const bunkerPubkey = getPublicKey(bunkerSeckey);
 
-  getKey(name: string): KnoxKey | undefined {
-    return this.getState().keys.find((key) => key.name === name);
-  }
+      const authorization: KnoxAuthorization = {
+        key: key.name,
+        secret,
+        relays: opts.relays,
+        pubkeys: [],
+        bunker_sec: new ScrambledBytes(bunkerSeckey),
+        created_at: new Date(),
+        expires_at: opts.expiresAt,
+        max_uses: opts.maxUses,
+      };
 
-  generateUri(opts: { name: string; relays: string[]; maxUses?: number; expiresAt?: Date }): URL {
-    const key = this.getState().keys.find((key) => key.name === opts.name);
-    if (!key) {
-      throw new BunkerError(`Key "${opts.name}" not found.`);
-    }
+      const uri = new URL(`bunker://${bunkerPubkey}`);
 
-    const secret = crypto.randomUUID();
+      for (const relay of opts.relays) {
+        uri.searchParams.append('relay', relay);
+      }
 
-    const bunkerSeckey = generateSecretKey();
-    const bunkerPubkey = getPublicKey(bunkerSeckey);
+      uri.searchParams.set('secret', secret);
 
-    const authorization: KnoxAuthorization = {
-      key: key.name,
-      secret,
-      relays: opts.relays,
-      pubkeys: [],
-      bunker_sec: new ScrambledBytes(bunkerSeckey),
-      created_at: new Date(),
-      expires_at: opts.expiresAt,
-      max_uses: opts.maxUses,
-    };
+      state.authorizations.push(authorization);
 
-    const uri = new URL(`bunker://${bunkerPubkey}`);
-
-    for (const relay of opts.relays) {
-      uri.searchParams.append('relay', relay);
-    }
-
-    uri.searchParams.set('secret', secret);
-
-    this.setState((state) => {
-      return produce(state, (draft) => {
-        draft.authorizations.push(authorization);
-      });
-    });
-
-    return uri;
-  }
-
-  authorize(pubkey: string, secret: string): void {
-    this.setState((state) => {
-      return produce(state, (draft) => {
-        const authorization = draft.authorizations.find((auth) => auth.secret === secret);
-
-        if (!authorization) {
-          throw new ConnectError('Authorization not found.');
-        }
-
-        if (authorization.pubkeys.includes(pubkey)) {
-          return;
-        }
-
-        if (authorization.pubkeys.length >= (authorization.max_uses ?? Infinity)) {
-          throw new ConnectError('Max uses exceeded.');
-        }
-
-        if (authorization.expires_at && Date.now() > authorization.expires_at.getTime()) {
-          throw new ConnectError('Authorization expired.');
-        }
-
-        authorization.pubkeys.push(pubkey);
-      });
+      return uri;
     });
   }
 
-  setState(state: ((state: KnoxState) => KnoxState) | KnoxState): void {
-    return this.store.setState(state);
-  }
+  async authorize(pubkey: string, secret: string): Promise<void> {
+    await this.update((state) => {
+      const authorization = state.authorizations.find((auth) => auth.secret === secret);
 
-  getState(): KnoxState {
-    return this.store.getState();
+      if (!authorization) {
+        throw new ConnectError('Authorization not found.');
+      }
+
+      if (authorization.pubkeys.includes(pubkey)) {
+        return;
+      }
+
+      if (authorization.pubkeys.length >= (authorization.max_uses ?? Infinity)) {
+        throw new ConnectError('Max uses exceeded.');
+      }
+
+      if (authorization.expires_at && Date.now() > authorization.expires_at.getTime()) {
+        throw new ConnectError('Authorization expired.');
+      }
+
+      authorization.pubkeys.push(pubkey);
+    });
   }
 }

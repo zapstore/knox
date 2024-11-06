@@ -26,12 +26,12 @@ export class KnoxFS {
   }
 
   /** Update the state of the bunker file. */
-  static async update(path: string, crypt: BunkerCrypt, update: (state: KnoxState) => KnoxState): Promise<void> {
+  static async update(path: string, crypt: BunkerCrypt, updateFn: (state: KnoxState) => KnoxState): Promise<void> {
     using file = await Deno.open(path, { write: true });
     await file.lock(true);
 
     const prevState = await KnoxFS.read(path, crypt);
-    const nextState = update(prevState);
+    const nextState = updateFn(prevState);
 
     await KnoxFS.write(path, nextState, crypt);
   }
