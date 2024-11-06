@@ -138,6 +138,15 @@ export class KnoxStore {
     return uri;
   }
 
+  authorize(pubkey: string, secret: string): void {
+    this.store.setState((state) => {
+      return produce(state, (draft) => {
+        const authorization = draft.authorizations.find((auth) => auth.secret === secret);
+        authorization?.authorized_pubkeys.push(pubkey);
+      });
+    });
+  }
+
   getAuthorizations(): KnoxAuthorization[] {
     return this.store.getState().authorizations;
   }

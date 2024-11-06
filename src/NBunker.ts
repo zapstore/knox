@@ -39,6 +39,8 @@ export interface NBunkerOpts {
    * ```
    */
   onConnect?(request: NostrConnectRequest, event: NostrEvent): Promise<NostrConnectResponse> | NostrConnectResponse;
+  onRequest?(request: NostrConnectRequest, event: NostrEvent): void;
+  onResponse?(response: NostrConnectResponse, event: NostrEvent): void;
   /**
    * Callback when an error occurs while parsing a request event.
    * Client errors are not captured here, only errors that occur before arequest's `id` can be known,
@@ -107,6 +109,7 @@ export class NBunker {
    * by invoking the appropriate method on the `userSigner`.
    */
   private async handleRequest(request: NostrConnectRequest, event: NostrEvent): Promise<void> {
+    this.opts.onRequest?.(request, event);
     const { userSigner, onConnect } = this.opts;
     const { pubkey } = event;
 
@@ -191,6 +194,7 @@ export class NBunker {
       created_at: Math.floor(Date.now() / 1000),
     });
 
+    this.opts.onResponse?.(response, event);
     await relay.event(event);
   }
 

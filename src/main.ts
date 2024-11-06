@@ -203,10 +203,17 @@ knox.command('start')
 
           if (secret === authorization.secret) {
             bunker.authorize(event.pubkey);
+            store.authorize(event.pubkey, secret);
             return { id: request.id, result: 'ack' };
           } else {
             return { id: request.id, result: '', error: 'Invalid secret' };
           }
+        },
+        onRequest(request) {
+          console.log('Request:', request);
+        },
+        onResponse(response) {
+          console.log('Response:', response);
         },
         onError(error) {
           console.error(error);
