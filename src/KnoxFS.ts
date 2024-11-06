@@ -7,10 +7,7 @@ import { ScrambledBytes } from './ScrambledBytes.ts';
 export class KnoxFS {
   /** Low-level function to read the bunker file. */
   static async read(file: Deno.FsFile, crypt: BunkerCrypt): Promise<KnoxState> {
-    const response = new Response(file.readable);
-    const buffer = await response.arrayBuffer();
-
-    const enc = new Uint8Array(buffer);
+    const enc = await new Response(file.readable).bytes();
     const dec = crypt.decrypt(enc);
 
     const text = new TextDecoder().decode(dec);
