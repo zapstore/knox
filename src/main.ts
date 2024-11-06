@@ -29,8 +29,7 @@ knox.command('init')
     await file.lock(true);
 
     using crypt = promptPassphrase('Enter a new passphrase:');
-    const store = new KnoxStore(file, crypt);
-    const state = store.getState();
+    const state = new KnoxStore().getState();
 
     await KnoxFS.write(file, state, crypt);
   });
@@ -40,7 +39,7 @@ knox.command('add')
   .argument('<name>', 'name of the key')
   .action(async (name) => {
     using bunker = await openBunker();
-    const { store } = bunker;
+    const { file, store } = bunker;
 
     const key = promptSecret('Enter secret key (leave blank to generate):', { clear: true });
 
@@ -60,7 +59,7 @@ knox.command('add')
     }
 
     store.addKey(name, sec);
-    await store.save();
+    await KnoxFS.write(file, store.getState(), bunker.crypt);
   });
 
 knox.command('uri')
@@ -89,7 +88,7 @@ knox.command('uri')
     });
 
     using bunker = await openBunker();
-    const { store } = bunker;
+    const { file, store, crypt } = bunker;
 
     const key = store.listKeys().find((key) => key.name === name);
     if (!key) {
@@ -103,7 +102,7 @@ knox.command('uri')
       expiresAt: opts.expires ? new Date(opts.expires) : undefined,
     });
 
-    await store.save();
+    await KnoxFS.write(file, store.getState(), crypt);
     console.log(uri.toString());
   });
 
@@ -172,7 +171,7 @@ knox.command('start')
   .description('start the bunker daemon')
   .action(async () => {
     using bunker = await openBunker();
-    const { store } = bunker;
+    const { file, store, crypt } = bunker;
 
     console.log('Starting bunker daemon...');
     console.log('Press Ctrl+C to stop.');
@@ -213,7 +212,7 @@ knox.command('start')
           if (secret === authorization.secret) {
             bunker.authorize(event.pubkey);
             store.authorize(event.pubkey, secret);
-            await store.save();
+            await KnoxFS.write(file, store.getState(), crypt);
             return { id: request.id, result: 'ack' };
           } else {
             return { id: request.id, result: '', error: 'Invalid secret' };
@@ -273,7 +272,7 @@ knox.command('export')
   });
 
 /** Prompt the user to unlock and open the store. Most subcommands (except `init`) call this. */
-async function openBunker(): Promise<{ store: KnoxStore; crypt: BunkerCrypt } & Disposable> {
+async function openBunker(): Promise<{ file: Deno.FsFile; store: KnoxStore; crypt: BunkerCrypt } & Disposable> {
   const { file: path } = knox.opts();
 
   if (!await fileExists(path)) {
@@ -282,10 +281,11 @@ async function openBunker(): Promise<{ store: KnoxStore; crypt: BunkerCrypt } & 
 
   const file = await Deno.open(path, { write: true });
   const crypt = promptPassphrase('Enter unlock passphrase:');
-  const store = new KnoxStore(file, crypt);
-  await store.load();
+  const state = await KnoxFS.read(file, crypt);
+  const store = new KnoxStore(state);
 
   return {
+    file,
     store,
     crypt,
     [Symbol.dispose]: () => {
