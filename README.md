@@ -15,9 +15,12 @@ Options:
 Commands:
   init                             initialize a new bunker
   add <name>                       add a new key to the bunker
+  remove <name>                    remove a key from the bunker
   uri [options] <name> <relay...>  generate a bunker URI for a key
-  status                           show the status of the bunker
+  revoke <secret>                  revoke an authorization
+  status [name]                    show the status of the bunker
   start                            start the bunker daemon
+  change                           change the passphrase of the bunker
   export [options]                 export keys from the bunker
   help [command]                   display help for command
 ```
@@ -30,11 +33,10 @@ Commands:
 
 ## Getting Started
 
-To install, download the `knox` binary and make it executable:
+To install, run the install script:
 
 ```sh
-sudo wget -O /usr/local/bin/knox https://gitlab.com/soapbox-pub/knox/-/jobs/artifacts/main/raw/knox?job=compile
-sudo chmod +x /usr/local/bin/knox
+curl https://dl.soapbox.pub/install/knox.sh | sh
 ```
 
 To create your first bunker, run:
