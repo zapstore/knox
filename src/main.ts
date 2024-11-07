@@ -452,7 +452,15 @@ async function openBunker() {
   await assertBunkerExists(path);
 
   const crypt = promptPassphrase('Enter unlock passphrase:');
-  const state = await KnoxFS.read(path, crypt);
+
+  const state = await KnoxFS.read(path, crypt).catch((error) => {
+    if (error instanceof Error && error.message.includes('invalid tag')) {
+      throw new BunkerError('wrong passphrase');
+    } else {
+      throw error;
+    }
+  });
+
   const store = new KnoxStore((updateFn) => KnoxFS.update(path, crypt, updateFn));
 
   return {
