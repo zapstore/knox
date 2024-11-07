@@ -346,6 +346,19 @@ knox.command('start')
     }
   });
 
+knox.command('change')
+  .description('change the passphrase of the bunker')
+  .action(async () => {
+    const { file: path } = knox.opts();
+    await assertBunkerExists(path);
+
+    const crypt = promptPassphrase('Enter current passphrase:');
+    const state = await KnoxFS.read(path, crypt);
+
+    const newCrypt = promptPassphrase('Enter new passphrase:');
+    await KnoxFS.write(path, state, newCrypt);
+  });
+
 knox.command('export')
   .description('export keys from the bunker')
   .option('--format <format>', 'output format (csv, jsonl)', 'csv')
