@@ -26,10 +26,10 @@ knox.command('init')
       throw new BunkerError('Bunker file already exists');
     }
 
+    using crypt = promptPassphrase('Enter a new passphrase:');
+
     using file = await Deno.open(path, { createNew: true, write: true });
     await file.lock(true);
-
-    using crypt = promptPassphrase('Enter a new passphrase:');
 
     const state: KnoxState = {
       keys: [],
