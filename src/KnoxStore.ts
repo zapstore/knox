@@ -99,4 +99,11 @@ export class KnoxStore {
       return state;
     });
   }
+
+  async revoke(secret: string): Promise<void> {
+    await this.update((state) => {
+      state.authorizations = state.authorizations.filter((auth) => auth.secret !== secret);
+      return state;
+    });
+  }
 }

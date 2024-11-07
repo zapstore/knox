@@ -110,6 +110,14 @@ knox.command('uri')
     console.log(uri.toString());
   });
 
+knox.command('revoke')
+  .description('revoke an authorization')
+  .argument('<secret>', 'authorization secret')
+  .action(async (secret) => {
+    using bunker = await openBunker();
+    await bunker.store.revoke(secret);
+  });
+
 knox.command('status')
   .description('show the status of the bunker')
   .action(async () => {
