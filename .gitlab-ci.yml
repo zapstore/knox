@@ -12,11 +12,11 @@ compile:
     - deno fmt --check
     - deno lint
     - deno task test
-    - deno compile -A -o knox-x86_64-unknown-linux-gnu src/main.ts --target x86_64-unknown-linux-gnu
-    - deno compile -A -o knox-aarch64-unknown-linux-gnu src/main.ts --target aarch64-unknown-linux-gnu
-    - deno compile -A -o knox-x86_64-pc-windows-msvc.exe src/main.ts --target x86_64-pc-windows-msvc
-    - deno compile -A -o knox-x86_64-apple-darwin src/main.ts --target x86_64-apple-darwin
-    - deno compile -A -o knox-aarch64-apple-darwin src/main.ts --target aarch64-apple-darwin
+    - deno compile -A -o knox-x86_64-unknown-linux-gnu --target x86_64-unknown-linux-gnu src/main.ts
+    - deno compile -A -o knox-aarch64-unknown-linux-gnu --target aarch64-unknown-linux-gnu src/main.ts
+    - deno compile -A -o knox-x86_64-pc-windows-msvc.exe --target x86_64-pc-windows-msvc src/main.ts
+    - deno compile -A -o knox-x86_64-apple-darwin --target x86_64-apple-darwin src/main.ts
+    - deno compile -A -o knox-aarch64-apple-darwin --target aarch64-apple-darwin src/main.ts
   artifacts:
     when: always
     paths:
