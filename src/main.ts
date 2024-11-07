@@ -236,13 +236,19 @@ knox.command('start')
           }
         },
         onRequest(request, event) {
-          console.debug(event.id, 'Request:', request);
+          console.debug(
+            'request',
+            chalk.bold(key.name),
+            chalk.bold(request.method),
+            chalk.dim(request.id),
+            chalk.dim(event.id),
+          );
         },
         onResponse(response, event) {
-          console.debug(event.id, 'Response:', response);
+          console.debug('response', chalk.bold(key.name), chalk.bold(response.id), chalk.dim(event.id));
         },
         onError(error, event) {
-          console.warn('Error:', event.id, error);
+          console.error('error', chalk.bold(key.name), chalk.dim(event.id), error);
         },
       });
 
