@@ -1,7 +1,6 @@
 import { generateSecretKey, getPublicKey } from 'nostr-tools';
 
 import { BunkerError } from './BunkerError.ts';
-import { ConnectError } from './ConnectError.ts';
 import { KnoxAuthorization, type KnoxState } from './KnoxState.ts';
 import { ScrambledBytes } from './ScrambledBytes.ts';
 
@@ -72,7 +71,7 @@ export class KnoxStore {
       const authorization = state.authorizations.find((auth) => auth.secret === secret);
 
       if (!authorization) {
-        throw new ConnectError('Authorization not found.');
+        throw new BunkerError('Authorization not found.');
       }
 
       if (authorization.pubkeys.includes(pubkey)) {
@@ -80,11 +79,11 @@ export class KnoxStore {
       }
 
       if (authorization.pubkeys.length >= (authorization.max_uses ?? Infinity)) {
-        throw new ConnectError('Max uses exceeded.');
+        throw new BunkerError('Max uses exceeded.');
       }
 
       if (authorization.expires_at && Date.now() > authorization.expires_at.getTime()) {
-        throw new ConnectError('Authorization expired.');
+        throw new BunkerError('Authorization expired.');
       }
 
       authorization.pubkeys.push(pubkey);

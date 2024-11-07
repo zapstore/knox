@@ -9,7 +9,6 @@ import { BunkerError } from './BunkerError.ts';
 import { KnoxFS } from './KnoxFS.ts';
 import { KnoxStore } from './KnoxStore.ts';
 import { NBunker } from './NBunker.ts';
-import { ConnectError } from './ConnectError.ts';
 import { KnoxAuthorization, KnoxKey, KnoxState } from './KnoxState.ts';
 
 const knox = program
@@ -223,7 +222,7 @@ knox.command('start')
               await store.authorize(event.pubkey, secret);
               session.authorize(event.pubkey);
             } catch (error) {
-              if (error instanceof ConnectError) {
+              if (error instanceof BunkerError) {
                 return { id: request.id, result: '', error: error.message };
               } else {
                 console.error(error);
