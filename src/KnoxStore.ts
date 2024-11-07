@@ -25,6 +25,14 @@ export class KnoxStore {
     });
   }
 
+  async removeKey(name: string): Promise<void> {
+    await this.update((state) => {
+      state.keys = state.keys.filter((key) => key.name !== name);
+      state.authorizations = state.authorizations.filter((auth) => auth.key !== name);
+      return state;
+    });
+  }
+
   async generateUri(opts: { key: string; relays: string[]; maxUses?: number; expiresAt?: Date }): Promise<URL> {
     let uri: URL;
 

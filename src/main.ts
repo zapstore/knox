@@ -65,6 +65,14 @@ knox.command('add')
     await bunker.store.addKey(name, sec);
   });
 
+knox.command('remove')
+  .description('remove a key from the bunker')
+  .argument('<name>', 'name of the key')
+  .action(async (name) => {
+    using bunker = await openBunker();
+    await bunker.store.removeKey(name);
+  });
+
 knox.command('uri')
   .description('generate a bunker URI for a key')
   .argument('<name>', 'name of the key')
