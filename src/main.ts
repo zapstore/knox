@@ -45,7 +45,7 @@ knox.command('add')
   .argument('<name>', 'name of the key')
   .action(async (name) => {
     using bunker = await openBunker();
-    const key = promptSecret('Enter secret key (leave blank to generate):', { clear: true });
+    const key = promptSecret(`Enter ${name}'s nsec (leave blank to generate):`, { clear: true });
 
     let sec: Uint8Array | undefined;
     if (!key) {
