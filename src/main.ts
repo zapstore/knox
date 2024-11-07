@@ -416,6 +416,36 @@ knox.command('export')
     }
   });
 
+knox.command('update')
+  .description('update knox to the latest version')
+  .argument('[ref]', 'branch or tag to update to', 'main')
+  .option('-o, --output <file>', 'output file', '/usr/local/bin/knox')
+  .action(async (ref, { output }) => {
+    const target = Deno.build.target;
+
+    console.log(chalk.dim('Downloading the latest version...'));
+    const response = await fetch(
+      `https://gitlab.com/soapbox-pub/knox/-/jobs/artifacts/${ref}/raw/knox-${target}?job=compile`,
+    );
+
+    if (!response.body) {
+      throw new BunkerError('Failed to download the latest version');
+    }
+
+    try {
+      console.log(chalk.dim('Updating...'));
+      await Deno.writeFile(output, response.body);
+      await Deno.chmod(output, 0o755);
+      console.log(chalk.green(`Updated knox to ${chalk.bold(ref)}.`));
+    } catch (error) {
+      if (error instanceof Deno.errors.PermissionDenied) {
+        throw new BunkerError(`Permission denied. Try ${chalk.bold('sudo knox update')}.`);
+      } else {
+        throw error;
+      }
+    }
+  });
+
 /** Prompt the user to unlock and open the store. Most subcommands (except `init`) call this. */
 async function openBunker() {
   const { file: path } = knox.opts();

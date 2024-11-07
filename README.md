@@ -22,6 +22,7 @@ Commands:
   start                            start the bunker daemon
   change                           change the passphrase of the bunker
   export [options]                 export keys from the bunker
+  update [options] [ref]           update knox to the latest version
   help [command]                   display help for command
 ```
 
