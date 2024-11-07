@@ -16,6 +16,8 @@ export interface NBunkerOpts {
   userSigner: NostrSigner;
   /** Signer to sign, encrypt, and decrypt the kind 24133 transport events events. */
   bunkerSigner: NostrSigner;
+  /** Initial set of authorized pubkeys. */
+  authorizedPubkeys?: Set<string>;
   /**
    * Callback when a `connect` request has been received.
    * This is a good place to call `bunker.authorize()` with the remote client's pubkey.
@@ -58,14 +60,16 @@ export interface NBunkerOpts {
  */
 export class NBunker {
   private controller = new AbortController();
-  private authorizedPubkeys = new Set<string>();
   private signal: AbortSignal;
+
+  authorizedPubkeys: Set<string>;
 
   /** Wait for the bunker to be ready before sending requests. */
   public waitReady: Promise<void>;
   private setReady!: () => void;
 
   constructor(private opts: NBunkerOpts) {
+    this.authorizedPubkeys = opts.authorizedPubkeys ?? new Set();
     this.signal = opts.signal ? AbortSignal.any([opts.signal, this.controller.signal]) : this.controller.signal;
     this.waitReady = new Promise((resolve) => {
       this.setReady = resolve;

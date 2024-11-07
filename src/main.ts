@@ -214,6 +214,7 @@ knox.command('start')
         relay,
         bunkerSigner,
         userSigner,
+        authorizedPubkeys: new Set(authorization.pubkeys),
         async onConnect(request, event) {
           const [, secret] = request.params;
 
@@ -244,10 +245,6 @@ knox.command('start')
           console.warn('Error:', event.id, error);
         },
       });
-
-      for (const pubkey of authorization.pubkeys) {
-        session.authorize(pubkey);
-      }
 
       console.log(
         chalk.green('up'),
@@ -313,6 +310,14 @@ knox.command('start')
             );
           } else {
             console.log(chalk.red('down'), chalk.dim(id));
+          }
+        }
+
+        // Update the authorized pubkeys for each session.
+        for (const authorization of state.authorizations) {
+          const session = bunkers.get(authorization.secret);
+          if (session) {
+            session.authorizedPubkeys = new Set(authorization.pubkeys);
           }
         }
       }
