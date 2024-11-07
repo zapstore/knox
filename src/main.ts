@@ -120,7 +120,8 @@ knox.command('revoke')
 
 knox.command('status')
   .description('show the status of the bunker')
-  .action(async () => {
+  .argument('[name]', 'name of the key')
+  .action(async (name) => {
     using bunker = await openBunker();
     const { state } = bunker;
 
@@ -130,6 +131,26 @@ knox.command('status')
       } else {
         console.log(chalk.bold(name));
       }
+    }
+
+    if (name) {
+      const key = state.keys.find((key) => key.name === name);
+      const authorizations = state.authorizations.filter((auth) => auth.key === name);
+
+      if (!key) {
+        throw new BunkerError(`Key "${name}" not found`);
+      }
+
+      console.log(chalk.bold(name), chalk.dim(key.created_at.toISOString()));
+      console.log();
+
+      for (const { secret, pubkeys, max_uses } of authorizations) {
+        const ratio = '(' + pubkeys.length + '/' + (max_uses ?? '∞') + ')';
+        const fn = pubkeys.length >= (max_uses ?? Infinity) ? chalk.green : chalk.yellow;
+        console.log(secret, fn(ratio));
+      }
+
+      return;
     }
 
     for (const key of state.keys) {
