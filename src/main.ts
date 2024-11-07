@@ -2,7 +2,7 @@ import { program } from '@commander-js/extra-typings';
 import { NPool, NRelay1, NSecSigner } from '@nostrify/nostrify';
 import { promptSecret } from '@std/cli';
 import chalk from 'chalk';
-import { generateSecretKey, nip19 } from 'nostr-tools';
+import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools';
 
 import { BunkerCrypt } from './BunkerCrypt.ts';
 import { BunkerError } from './BunkerError.ts';
@@ -116,6 +116,28 @@ knox.command('revoke')
   .action(async (secret) => {
     using bunker = await openBunker();
     await bunker.store.revoke(secret);
+  });
+
+knox.command('pubkey')
+  .description('show the public key of a secret key')
+  .argument('<name>', 'name of the key')
+  .option('--hex', 'output in hexadecimal')
+  .action(async (name, { hex }) => {
+    using bunker = await openBunker();
+    const key = bunker.state.keys.find((key) => key.name === name);
+
+    if (!key) {
+      throw new BunkerError(`Key "${name}" not found`);
+    }
+
+    using nsec = key.sec.unscramble();
+    const pubkey = getPublicKey(nsec);
+
+    if (hex) {
+      console.log(pubkey);
+    } else {
+      console.log(nip19.npubEncode(pubkey));
+    }
   });
 
 knox.command('status')

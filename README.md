@@ -1,6 +1,6 @@
-# Knox
+# knox
 
-Knox is a command-line Nostr bunker built with Deno.
+knox is a command-line Nostr bunker built with Deno.
 
 ```
 Usage: knox [options] [command]
@@ -18,6 +18,7 @@ Commands:
   remove <name>                    remove a key from the bunker
   uri [options] <name> <relay...>  generate a bunker URI for a key
   revoke <secret>                  revoke an authorization
+  pubkey [options] <name>          show the public key of a secret key
   status [name]                    show the status of the bunker
   start                            start the bunker daemon
   change                           change the passphrase of the bunker
@@ -35,7 +36,7 @@ curl https://dl.soapbox.pub/install/knox.sh | sh
 ```
 
 This will download the latest version of `knox` and install it to `/usr/local/bin`.
-Linux, MacOs, and Windows are supported.
+Linux, MacOS, and Windows are supported.
 
 ### Direct Download
 
