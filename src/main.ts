@@ -89,9 +89,6 @@ knox.command('uri')
     relays = relays.map((relay) => {
       try {
         const url = new URL(relay);
-        if (url.protocol !== 'wss:') {
-          throw new Error('Invalid protocol');
-        }
         return url.toString();
       } catch {
         throw new BunkerError(`Invalid relay URL "${relay}"`);
