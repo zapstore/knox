@@ -27,29 +27,6 @@ Commands:
   help [command]                   display help for command
 ```
 
-## Install
-
-To install, run the install script:
-
-```sh
-curl https://dl.soapbox.pub/install/knox.sh | sh
-```
-
-This will download the latest version of `knox` and install it to `/usr/local/bin`.
-Linux, MacOS, and Windows are supported.
-
-### Direct Download
-
-You can also directly download a precompiled executable.
-
-- [Linux x86 (64-bit)](https://gitlab.com/soapbox-pub/knox/-/jobs/artifacts/main/raw/knox-x86_64-unknown-linux-gnu?job=compile)
-- [Linux ARM (64-bit)](https://gitlab.com/soapbox-pub/knox/-/jobs/artifacts/main/raw/knox-aarch64-unknown-linux-gnu?job=compile)
-- [MacOS x86 (64-bit)](https://gitlab.com/soapbox-pub/knox/-/jobs/artifacts/main/raw/knox-x86_64-apple-darwin?job=compile)
-- [MacOS ARM (64-bit)](https://gitlab.com/soapbox-pub/knox/-/jobs/artifacts/main/raw/knox-aarch64-apple-darwin?job=compile)
-- [Windows x86 (64-bit)](https://gitlab.com/soapbox-pub/knox/-/jobs/artifacts/main/raw/knox-x86_64-pc-windows-msvc.exe?job=compile)
-
-Make sure to `chmod +x` the file after downloading, and place it somewhere in your `$PATH`.
-
 ### Running with Deno
 
 You can clone this repo, and then run `deno task knox` to run the CLI.
